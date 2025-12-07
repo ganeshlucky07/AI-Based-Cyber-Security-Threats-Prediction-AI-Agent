@@ -1,0 +1,206 @@
+Student Name: Ravula Ganesh
+
+College: Anurag University
+
+Mentor Name: Mr. Vivek
+
+
+1. Introduction
+
+This project implements a MySQL database to support an AI-based cybersecurity threat prediction system. The database stores organizational assets, security events, threat intelligence feeds, and AI model predictions. SQL queries are used to analyze and evaluate threats for proactive defense.
+
+
+2. Database Design
+
+Tables:
+
+1. Assets – Stores details of all IT assets within the organization.
+
+
+2. Security_Events – Logs all detected security-related events.
+
+
+3. Threat_Intel_Feeds – Contains data from external cybersecurity intelligence sources.
+
+
+4. Model_Predictions – Holds AI model predictions about potential security threats.
+
+
+import sqlite3
+import pandas as pd
+from datetime import datetime
+# helper display function available in this environment
+try:
+    from caas_jupyter_tools import display_dataframe_to_user
+except Exception:
+    display_dataframe_to_user = None
+
+DB_PATH = "/content/ai_cybersecurity.db"
+
+# Connect and enable foreign keys in SQLite
+conn = sqlite3.connect(DB_PATH)
+conn.execute("PRAGMA foreign_keys = ON;")
+cur = conn.cursor()
+
+# Drop tables if they exist (safe re-run)
+cur.executescript("""
+DROP TABLE IF EXISTS Model_Predictions;
+DROP TABLE IF EXISTS Threat_Intel_Feeds;
+DROP TABLE IF EXISTS Security_Events;
+DROP TABLE IF EXISTS Assets;
+""")
+
+# Create tables using SQLite-compatible SQL
+cur.executescript("""
+CREATE TABLE Assets (
+    asset_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    asset_name TEXT,
+    asset_type TEXT,
+    owner_department TEXT,
+    criticality_level TEXT CHECK (criticality_level IN ('Low','Medium','High','Critical'))
+);
+
+CREATE TABLE Security_Events (
+    event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    asset_id INTEGER,
+    event_type TEXT,
+    event_timestamp TEXT, -- ISO formatted datetime string
+    source_ip TEXT,
+    destination_ip TEXT,
+    severity_score INTEGER CHECK (severity_score BETWEEN 1 AND 10),
+    FOREIGN KEY (asset_id) REFERENCES Assets(asset_id) ON DELETE CASCADE
+);
+
+CREATE TABLE Threat_Intel_Feeds (
+    feed_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    feed_name TEXT,
+    threat_type TEXT,
+    indicator_ip TEXT,
+    indicator_hash TEXT,
+    detected_timestamp TEXT
+);
+
+CREATE TABLE Model_Predictions (
+    prediction_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    asset_id INTEGER,
+    prediction_timestamp TEXT,
+    predicted_threat_type TEXT,
+    predicted_risk_score REAL,
+    model_version TEXT,
+    FOREIGN KEY (asset_id) REFERENCES Assets(asset_id) ON DELETE CASCADE
+);
+""")
+
+# Insert mock data (shortened set)
+assets = [
+    ('WebServer-01', 'Server', 'IT', 'Critical'),
+    ('Database-01', 'Server', 'Data', 'Critical'),
+    ('Dev-VM-01', 'VM', 'R&D', 'Medium'),
+]
+cur.executemany("INSERT INTO Assets (asset_name, asset_type, owner_department, criticality_level) VALUES (?,?,?,?);", assets)
+
+security_events = [
+    (1, 'malware_detected', '2025-10-01 08:14:22', '203.0.113.5', '10.0.0.1', 9),
+    (1, 'port_scan', '2025-10-02 10:44:19', '172.16.0.22', '10.0.0.1', 6),
+    (2, 'unauthorized_access', '2025-10-03 02:12:05', '198.51.100.10', '10.0.0.2', 8),
+    (3, 'malware_detected', '2025-10-11 11:00:00', '203.0.113.5', '10.0.0.3', 7)
+]
+cur.executemany("""
+INSERT INTO Security_Events (asset_id, event_type, event_timestamp, source_ip, destination_ip, severity_score)
+VALUES (?,?,?,?,?,?);
+""", security_events)
+
+threat_feeds = [
+    ('AlienVault', 'malware', '203.0.113.5', 'A1B2C3D4E5', '2025-10-01 07:00:00'),
+    ('TeamCymru', 'botnet', '198.51.100.10', 'DEADBEEF', '2025-09-30 12:00:00')
+]
+cur.executemany("""
+INSERT INTO Threat_Intel_Feeds (feed_name, threat_type, indicator_ip, indicator_hash, detected_timestamp)
+VALUES (?,?,?,?,?);
+""", threat_feeds)
+
+model_preds = [
+    (1, '2025-10-10 10:00:00', 'ransomware_alert', 9.8, 'v2.1'),
+    (2, '2025-10-02 01:00:00', 'unauthorized_access', 7.5, 'v2.0')
+]
+cur.executemany("""
+INSERT INTO Model_Predictions (asset_id, prediction_timestamp, predicted_threat_type, predicted_risk_score, model_version)
+VALUES (?,?,?,?,?);
+""", model_preds)
+
+conn.commit()
+
+# ---- Analytical Query 1: Top 5 Assets by Severe Events (severity_score >= 8)
+q1 = """
+SELECT a.asset_name, COUNT(*) AS severe_events
+FROM Security_Events e
+JOIN Assets a ON e.asset_id = a.asset_id
+WHERE e.severity_score >= 8
+GROUP BY a.asset_name
+ORDER BY severe_events DESC
+LIMIT 5;
+"""
+df1 = pd.read_sql_query(q1, conn)
+
+# ---- Analytical Query 2: Threat Intel Correlation with Security Logs
+# Note: SQLite doesn't allow JOIN ... ON (a OR b) directly with table alias mixing in ON, but this works.
+q2 = """
+SELECT e.event_id, a.asset_name, f.feed_name, f.threat_type, e.source_ip, e.destination_ip, e.event_timestamp
+FROM Security_Events e
+JOIN Assets a ON e.asset_id = a.asset_id
+JOIN Threat_Intel_Feeds f ON e.source_ip = f.indicator_ip OR e.destination_ip = f.indicator_ip
+ORDER BY e.event_timestamp DESC;
+"""
+df2 = pd.read_sql_query(q2, conn)
+
+# ---- Analytical Query 3: Model Prediction Validation (within 24 hours)
+# Use SQLite datetime() to add 24 hours.
+q3 = """
+SELECT p.prediction_id, a.asset_name, p.predicted_threat_type,
+       CASE WHEN EXISTS (
+           SELECT 1 FROM Security_Events e
+           WHERE e.asset_id = p.asset_id
+             AND e.event_type = p.predicted_threat_type
+             AND e.event_timestamp BETWEEN p.prediction_timestamp
+                                       AND datetime(p.prediction_timestamp, '+24 hours')
+       ) THEN 'TRUE' ELSE 'FALSE' END AS actual_occurred
+FROM Model_Predictions p
+JOIN Assets a ON p.asset_id = a.asset_id
+ORDER BY p.prediction_timestamp DESC;
+"""
+df3 = pd.read_sql_query(q3, conn)
+
+# Display results
+print("Database file created at:", DB_PATH)
+print("\n--- Top Assets by Severe Events (severity >= 8) ---")
+if display_dataframe_to_user:
+    display_dataframe_to_user("Top Assets by Severe Events", df1)
+else:
+    print(df1.to_string(index=False))
+
+print("\n--- Threat Intel Correlation with Security Logs ---")
+if display_dataframe_to_user:
+    display_dataframe_to_user("Threat Intel Correlation with Security Logs", df2)
+else:
+    print(df2.to_string(index=False))
+
+print("\n--- Model Prediction Validation (within 24 hours) ---")
+if display_dataframe_to_user:
+    display_dataframe_to_user("Model Prediction Validation", df3)
+else:
+    print(df3.to_string(index=False))
+
+# Close connection
+conn.close()
+
+# Provide DB path for download if needed
+DB_PATH
+
+
+4. Conclusion & Future Enhancements
+
+Successfully implemented a MySQL database to store cybersecurity events and predictions.
+
+Queries can identify high-risk assets, correlate threat intelligence, and validate AI predictions.
+
+Future work: integrate automated triggers, dashboards, and full-scale AI model retraining logs.
