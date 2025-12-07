@@ -1,0 +1,53 @@
+AI Model Research for a Predictive Cybersecurity Platform
+
+This document provides an in-depth overview of AI and Machine Learning models for predictive cybersecurity. The content covers malware detection, network intrusion, anomaly detection, and phishing/URL analysis, detailing mechanisms, data requirements, strengths, and weaknesses.
+
+Malware Prediction
+
+Objective: Classify files as malicious or benign based on static characteristics.
+
+Model A: Ensemble Methods (Random Forest, XGBoost)
+
+How it Works: Combines multiple decision trees to make accurate predictions based on file features. Required Data & Features: File metadata (size, entropy), DLLs, function calls, section names, string analysis. Strengths: High accuracy, explainable, fast to train. Weaknesses: Requires manual feature engineering, vulnerable to obfuscation.
+
+Model B: Convolutional Neural Networks (CNNs)
+
+How it Works: Converts file binaries into images for pattern recognition. Required Data & Features: Raw binary content. Strengths: Automatic feature extraction, resistant to obfuscation, detects novel threats. Weaknesses: Black-box model, computationally expensive.
+
+Network Intrusion & Anomaly Prediction
+
+Objective: Analyze network traffic to identify ongoing or impending attacks.
+
+Model A: Unsupervised Autoencoders
+
+How it Works: Trained on normal activity; high reconstruction error indicates anomalies. Required Data & Features: NetFlow, firewall logs, packet size, IPs, protocols, ports. Strengths: Detects zero-day attacks, does not require labeled attacks. Weaknesses: Dependent on clean baseline, alerts do not explain the issue.
+
+Model B: Recurrent Neural Networks (LSTMs)
+
+How it Works: Learns sequences of network packets to detect deviations. Required Data & Features: Time-series network session data. Strengths: Context-aware, detects multi-stage attacks. Weaknesses: Complex, computationally intensive.
+
+Phishing & Malicious URL Prediction
+
+Objective: Analyze emails and URLs for phishing detection.
+
+Model A: NLP with Transformers (BERT)
+
+How it Works: Fine-tuned BERT identifies linguistic cues in phishing content. Required Data & Features: Email text, headers, subjects, URLs. Strengths: Deep contextual understanding, state-of-the-art accuracy. Weaknesses: Resource-intensive, slower than simpler models.
+
+Model B: Gradient Boosting (URL Features)
+
+How it Works: XGBoost on lexical and host-based URL features. Required Data & Features: URL length, dots, keywords, HTTPS, domain age. Strengths: Fast, lightweight, effective for obvious phishing URLs. Weaknesses: Can be bypassed by obfuscation or legitimate-looking domains.
+
+Recommended Development Plan
+
+Strategy: Multi-layered defense combining fast triage and deep analysis.
+
+Phase 1: Real-Time Triage and Baseline Detection (MVP)
+
+Malware & URL Screening: Ensemble Models for rapid classification. Network Anomaly Detection: Unsupervised Autoencoder establishes baseline and flags anomalies.
+
+Phase 2: Deep Analysis and Threat Confirmation
+
+Advanced Malware Analysis: CNN for deep binary inspection of flagged files. Advanced Phishing Detection: BERT for analyzing flagged emails/URLs for nuanced phishing patterns.
+
+This two-phase approach ensures rapid initial detection with Phase 1 and deep, high-confidence confirmation with Phase 2. bold text
