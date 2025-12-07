@@ -50,6 +50,9 @@ data/threat_snapshots.json
 # Trained models (optional - comment out if you want to include them)
 trained_models/
 
+# Archive folder (old/unrelated files)
+archive/
+
 # OS
 .DS_Store
 Thumbs.db
