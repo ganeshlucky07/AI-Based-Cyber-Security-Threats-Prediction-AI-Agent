@@ -1,6 +1,5 @@
 filename,extension,threat_probability,prediction_label,prediction_text,risk_type,threshold
 Charmander - Pokemon - Copy.jpg,.jpg,0.3,0,Safe,Low Threat,0.5
 Charmander - Pokemon.jpg,.jpg,0.3,0,Safe,Low Threat,0.5
-monkey d Luffy wallpaper - Copy.jpg,.jpg,0.3,0,Safe,Low Threat,0.5
 monkey d Luffy wallpaper.jpg,.jpg,0.3,0,Safe,Low Threat,0.5
 PDFGallery_20250228_152314 (2).pdf,.pdf,0.7,1,Threat,High Threat,0.5
