@@ -233,8 +233,4 @@ Both reports are written to the `reports/` directory in the project root.
 - **Live Threat Monitoring not updating**:
   - Confirm that the **Start Monitoring** button is active and that the websocket connection is healthy in the browser dev tools (no repeated connection errors).
 
----
 
-## License
-
-This project is intended as a personal / educational cyber security dashboard. Adapt or extend it as needed for your environment.
