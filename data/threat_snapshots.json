@@ -1,0 +1,134 @@
+{
+  "firestore": [
+    {
+      "id": 1,
+      "timestamp": "2025-11-28 14:53:13",
+      "threat_count": 35,
+      "file": "reports\\snapshots\\firestore\\firestore_snapshot_1.csv"
+    },
+    {
+      "id": 2,
+      "timestamp": "2025-12-01 17:18:13",
+      "threat_count": 93,
+      "file": "reports\\snapshots\\firestore\\firestore_snapshot_2.csv"
+    }
+  ],
+  "cassandra": [
+    {
+      "id": 1,
+      "timestamp": "2025-11-28 14:53:17",
+      "threat_count": 53,
+      "file": "reports\\snapshots\\cassandra\\cassandra_snapshot_1.csv"
+    }
+  ],
+  "redis": [
+    {
+      "id": 1,
+      "timestamp": "2025-11-28 14:53:20",
+      "threat_count": 71,
+      "file": "reports\\snapshots\\redis\\redis_snapshot_1.csv"
+    },
+    {
+      "id": 2,
+      "timestamp": "2025-11-28 14:53:43",
+      "threat_count": 175,
+      "file": "reports\\snapshots\\redis\\redis_snapshot_2.csv"
+    }
+  ],
+  "mongodb": [
+    {
+      "id": 1,
+      "timestamp": "2025-11-28 14:53:23",
+      "threat_count": 82,
+      "file": "reports\\snapshots\\mongodb\\mongodb_snapshot_1.csv"
+    },
+    {
+      "id": 2,
+      "timestamp": "2025-12-04 20:28:58",
+      "threat_count": 57,
+      "file": "reports\\snapshots\\mongodb\\mongodb_snapshot_2.csv"
+    },
+    {
+      "id": 3,
+      "timestamp": "2025-12-04 20:29:09",
+      "threat_count": 90,
+      "file": "reports\\snapshots\\mongodb\\mongodb_snapshot_3.csv"
+    }
+  ],
+  "neo4j": [
+    {
+      "id": 1,
+      "timestamp": "2025-11-28 14:53:25",
+      "threat_count": 93,
+      "file": "reports\\snapshots\\neo4j\\neo4j_snapshot_1.csv"
+    }
+  ],
+  "sqlserver": [
+    {
+      "id": 1,
+      "timestamp": "2025-11-28 14:53:35",
+      "threat_count": 142,
+      "file": "reports\\snapshots\\sqlserver\\sqlserver_snapshot_1.csv"
+    },
+    {
+      "id": 2,
+      "timestamp": "2025-12-01 17:18:10",
+      "threat_count": 81,
+      "file": "reports\\snapshots\\sqlserver\\sqlserver_snapshot_2.csv"
+    }
+  ],
+  "snowflake": [
+    {
+      "id": 1,
+      "timestamp": "2025-11-28 14:54:09",
+      "threat_count": 248,
+      "file": "reports\\snapshots\\snowflake\\snowflake_snapshot_1.csv"
+    }
+  ],
+  "dynamodb": [
+    {
+      "id": 1,
+      "timestamp": "2025-11-28 14:54:31",
+      "threat_count": 248,
+      "file": "reports\\snapshots\\dynamodb\\dynamodb_snapshot_1.csv"
+    }
+  ],
+  "clickhouse": [
+    {
+      "id": 1,
+      "timestamp": "2025-12-01 17:18:04",
+      "threat_count": 52,
+      "file": "reports\\snapshots\\clickhouse\\clickhouse_snapshot_1.csv"
+    }
+  ],
+  "elasticsearch": [
+    {
+      "id": 1,
+      "timestamp": "2025-12-01 17:18:07",
+      "threat_count": 71,
+      "file": "reports\\snapshots\\elasticsearch\\elasticsearch_snapshot_1.csv"
+    }
+  ],
+  "sqlite_external": [
+    {
+      "id": 1,
+      "timestamp": "2025-12-01 19:14:55",
+      "threat_count": 369,
+      "file": "reports\\snapshots\\sqlite_external\\sqlite_external_snapshot_1.csv"
+    }
+  ],
+  "mysql": [
+    {
+      "id": 1,
+      "timestamp": "2025-12-02 13:18:15",
+      "threat_count": 122,
+      "file": "reports\\snapshots\\mysql\\mysql_snapshot_1.csv"
+    },
+    {
+      "id": 2,
+      "timestamp": "2025-12-02 14:39:36",
+      "threat_count": 85,
+      "file": "reports\\snapshots\\mysql\\mysql_snapshot_2.csv"
+    }
+  ]
+}

@@ -1,0 +1,2769 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>AI Cyber Security Threat Agent</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
+  </head>
+  <body>
+    <div id="modelAccuracyWidget" class="model-accuracy-widget">
+      <span class="model-accuracy-label">Model Accuracy</span>
+      <span id="modelAccuracyValue" class="model-accuracy-value">--%</span>
+    </div>
+
+    <div class="app-shell">
+      <header class="app-header">
+        <div class="title-block">
+          <h1 class="title">Cyber Agent</h1>
+          <div class="title-signature">GANESH RAVULA</div>
+        </div>
+      </header>
+
+      {% with messages = get_flashed_messages() %}
+        {% if messages %}
+          <div class="flash-container">
+            {% for message in messages %}
+              <div class="flash-message">{{ message }}</div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+
+      <main class="layout-grid">
+        <section class="panel">
+          <h2 class="panel-title">Static Data Threat Check</h2>
+          <form class="form" action="{{ url_for('analyze_static_route') }}" method="post" enctype="multipart/form-data">
+            <label class="field-label">Static data files</label>
+            <input class="file-input" type="file" name="static_file" multiple required />
+
+            <div class="field-group">
+              <label class="field-label">Threat probability threshold</label>
+              <input class="slider" type="range" name="threshold" min="0.1" max="0.9" step="0.05" value="{{ static_summary.threshold if static_summary else 0.5 }}" />
+            </div>
+
+            <button class="primary-button" type="submit">Analyze Static Data</button>
+          </form>
+
+          {% if static_summary %}
+            <div class="static-dashboard">
+              <div class="dashboard-top">
+                <div class="dashboard-card">
+                  <div class="dashboard-card-header">
+                    <span class="dashboard-card-title">Overall Threat Score</span>
+                    <span class="dashboard-card-subtitle">Items Score</span>
+                  </div>
+                  <div class="gauge-wrapper">
+                    <div class="gauge-score">
+                      {{ '%.1f'|format(static_dashboard.overall_score) if static_dashboard else '0.0' }}
+                    </div>
+                    <div class="gauge-max">/ {{ static_dashboard.max_score if static_dashboard else 5.0 }}</div>
+                  </div>
+                </div>
+
+                <div class="dashboard-card">
+                  <div class="dashboard-card-header">
+                    <span class="dashboard-card-title">Key Predictions</span>
+                    <span class="dashboard-card-subtitle">Top risk levels</span>
+                  </div>
+                  <ul class="key-predictions-list">
+                    {% if static_dashboard and static_dashboard.key_predictions %}
+                      {% for item in static_dashboard.key_predictions %}
+                        <li>{{ item.label }}: {{ item.count }}</li>
+                      {% endfor %}
+                    {% else %}
+                      <li>No threats detected in this run.</li>
+                    {% endif %}
+                  </ul>
+                </div>
+
+                <div class="dashboard-card dashboard-download-card">
+                  <div class="dashboard-download-actions">
+                    <a class="primary-button" href="{{ url_for('download_static_report') }}">Download Report</a>
+                  </div>
+                </div>
+              </div>
+
+              <div class="chart-grid">
+                <div class="chart-wrapper">
+                  <div class="chart-title">Threat vs Safe Overview</div>
+                  <canvas id="staticThreatChart"></canvas>
+                </div>
+                <div class="chart-wrapper">
+                  <div class="chart-title">Threat Severity Distribution</div>
+                  <canvas id="staticSeverityChart"></canvas>
+                </div>
+              </div>
+
+              <div class="chart-wrapper wide">
+                <div class="chart-title">Risk Score Assessment</div>
+                <canvas id="staticRiskCurveChart"></canvas>
+              </div>
+
+              <div class="metrics-row">
+                <div class="metric-card">
+                  <span class="metric-label">Overall Status</span>
+                  <span class="metric-value">{{ static_summary.overall_status }}</span>
+                </div>
+                <div class="metric-card">
+                  <span class="metric-label">Total Records</span>
+                  <span class="metric-value">{{ static_summary.total }}</span>
+                </div>
+                <div class="metric-card">
+                  <span class="metric-label">Threat Records</span>
+                  <span class="metric-value">{{ static_summary.threats }}</span>
+                </div>
+                <div class="metric-card">
+                  <span class="metric-label">Safe Records</span>
+                  <span class="metric-value">{{ static_summary.safe }}</span>
+                </div>
+              </div>
+
+              {% if static_sample %}
+                <div class="table-wrapper">
+                  <div class="table-title">Sample Predictions (first 20 rows)</div>
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        {% for col in static_sample.columns %}
+                          <th>{{ col }}</th>
+                        {% endfor %}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for row in static_sample.rows %}
+                        <tr>
+                          {% for col in static_sample.columns %}
+                            <td>{{ row[col] }}</td>
+                          {% endfor %}
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              {% endif %}
+            </div>
+          {% endif %}
+        </section>
+
+        <section class="panel">
+          <h2 class="panel-title">URL Threat Intelligence</h2>
+          <p class="panel-text">Check individual URLs or upload a list for bulk reputation scoring.</p>
+
+          <div class="card-group">
+            <div class="sub-panel">
+              <h3 class="sub-panel-title">Single URL Check</h3>
+              <form class="form" action="{{ url_for('check_url_single_route') }}" method="get">
+                <label class="field-label">URL</label>
+                <input class="text-input" type="url" name="url" placeholder="https://example.com/login" required />
+                <div class="field-group">
+                  <label class="field-label">Malicious probability threshold</label>
+                  <input class="slider" type="range" name="url_threshold" min="0.1" max="0.9" step="0.05" value="{{ url_single_result.threshold if url_single_result else 0.5 }}" />
+                </div>
+                <button class="primary-button" type="submit">Check URL</button>
+              </form>
+
+              {% if url_single_result %}
+                <div class="metrics-row">
+                  <div class="metric-card">
+                    <span class="metric-label">Prediction</span>
+                    <span class="metric-value">{{ url_single_result.text }}</span>
+                  </div>
+                  <div class="metric-card">
+                    <span class="metric-label">Probability</span>
+                    <span class="metric-value">{{ '%.3f'|format(url_single_result.probability) }}</span>
+                  </div>
+                  <div class="metric-card">
+                    <span class="metric-label">Risk Type</span>
+                    <span class="metric-value">{{ url_single_result.risk_type }}</span>
+                  </div>
+                </div>
+                <p class="panel-text url-result-row">URL: <span class="url-chip">{{ url_single_result.url }}</span></p>
+              {% endif %}
+            </div>
+          </div>
+        </section>
+        <section class="panel">
+          <h2 class="panel-title">Live Threat Monitoring</h2>
+          <p class="panel-text">Real-time network threat detection and analysis dashboard.</p>
+          
+          <div class="live-monitoring-controls">
+            <button id="startMonitoring" class="primary-button">🟢 Start Monitoring</button>
+            <button id="stopMonitoring" class="secondary-button" disabled>🔴 Stop Monitoring</button>
+            <div class="monitoring-status">Status: <span id="monitoringStatus" class="status-inactive">Inactive</span></div>
+            <a href="/download_threat_report" class="secondary-button" id="downloadReportBtn" style="margin-left: auto;">📥 Download Report</a>
+          </div>
+
+          <!-- WiFi & VPN Status Cards -->
+          <div class="status-cards-row">
+            <div class="status-card wifi-card">
+              <div class="status-header">
+                <span class="status-icon">📡</span>
+                <span class="status-title">WiFi Connection</span>
+                <span class="status-indicator online"></span>
+              </div>
+              <div class="status-content">
+                <div class="status-item">
+                  <span class="label">SSID:</span>
+                  <span class="value" id="wifiSSID">Secured 5G</span>
+                </div>
+                <div class="status-item">
+                  <span class="label">Signal:</span>
+                  <span class="value" id="wifiSignal">85%</span>
+                </div>
+                <div class="status-item">
+                  <span class="label">Encryption:</span>
+                  <span class="value encryption" id="wifiEncryption">WPA3</span>
+                </div>
+                <div class="status-item">
+                  <span class="label">Security:</span>
+                  <span class="value secure" id="wifiSecurity">92% SECURE</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="status-card vpn-card">
+              <div class="status-header">
+                <span class="status-icon">🔒</span>
+                <span class="status-title">VPN Status</span>
+                <span class="status-indicator offline" id="vpnIndicator"></span>
+              </div>
+              <div class="status-content">
+                <div class="status-item">
+                  <span class="label">Server:</span>
+                  <span class="value" id="vpnServer">Direct Connection</span>
+                </div>
+                <div class="status-item">
+                  <span class="label">Protocol:</span>
+                  <span class="value" id="vpnProtocol">None</span>
+                </div>
+                <div class="status-badge disconnected" id="vpnStatus">Disconnected</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Key Metrics Row -->
+          <div class="live-metrics-row">
+            <div class="metric-card">
+              <div class="metric-value" id="packetsCount">0</div>
+              <div class="metric-label">Total Packets</div>
+            </div>
+            <div class="metric-card safe">
+              <div class="metric-value" id="safePackets">0</div>
+              <div class="metric-label">Safe Packets</div>
+            </div>
+            <div class="metric-card threat">
+              <div class="metric-value" id="threatPackets">0</div>
+              <div class="metric-label">Threat Packets</div>
+            </div>
+            <div class="metric-card critical">
+              <div class="metric-value" id="criticalCount">0</div>
+              <div class="metric-label">Critical</div>
+            </div>
+            <div class="metric-card high">
+              <div class="metric-value" id="highCount">0</div>
+              <div class="metric-label">High</div>
+            </div>
+            <div class="metric-card medium">
+              <div class="metric-value" id="mediumCount">0</div>
+              <div class="metric-label">Medium</div>
+            </div>
+            <div class="metric-card low">
+              <div class="metric-value" id="lowCount">0</div>
+              <div class="metric-label">Low</div>
+            </div>
+          </div>
+
+          <!-- Live Threat Timeline -->
+          <div class="timeline-container">
+            <h3 class="chart-title">Threat Timeline (Last 60 Seconds)</h3>
+            <canvas id="timelineChart" style="height: 250px;"></canvas>
+          </div>
+
+          <!-- Charts Row -->
+          <div class="charts-row">
+            <div class="chart-container">
+              <h3 class="chart-title">Threat Severity Distribution</h3>
+              <canvas id="severityChart"></canvas>
+            </div>
+            <div class="chart-container">
+              <h3 class="chart-title">Attack Type Distribution</h3>
+              <canvas id="threatTypeChart"></canvas>
+            </div>
+            <div class="chart-container">
+              <h3 class="chart-title">Attack Category Distribution</h3>
+              <canvas id="attackCategoryChart"></canvas>
+            </div>
+          </div>
+
+          <!-- Threat Feed -->
+          <div class="threat-feed-section">
+            <h3 class="feed-title">Live Threat Feed</h3>
+            <div class="threat-feed-header">
+              <span class="col-time">Time</span>
+              <span class="col-source">Source IP</span>
+              <span class="col-dest">Dest IP</span>
+              <span class="col-port">Port</span>
+              <span class="col-type">Threat Type</span>
+              <span class="col-severity">Severity</span>
+              <span class="col-confidence">Confidence</span>
+            </div>
+            <div id="threatFeed" class="threat-feed">
+              <div class="no-threats">No threats detected - monitoring inactive</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Live Threat Map Panel -->
+        <section class="panel">
+          <h2 class="panel-title">Live Threat Map</h2>
+          <div class="live-map-section">
+            <h3 class="chart-title">Live Threat Map</h3>
+            <div id="threatMap" class="threat-map">
+              <div class="map-empty-state">No threats yet - start monitoring to see attacks on the world map.</div>
+
+              <div id="liveAttackCard" class="live-attack-card">
+                <div class="live-attack-header">
+                  <span class="live-attack-status-dot"></span>
+                  <span class="live-attack-title">LIVE ATTACK IN PROGRESS</span>
+                </div>
+                <div class="live-attack-body">
+                  <div class="live-attack-row">
+                    <span class="live-attack-label">Origin Country:</span>
+                    <span id="liveAttackCountry" class="live-attack-value">—</span>
+                  </div>
+                  <div class="live-attack-row">
+                    <span class="live-attack-label">GPS Coordinates:</span>
+                    <span id="liveAttackCoords" class="live-attack-value">—</span>
+                  </div>
+                  <div class="live-attack-row">
+                    <span class="live-attack-label">Attack Type:</span>
+                    <span id="liveAttackType" class="live-attack-value live-attack-type">—</span>
+                  </div>
+                  <div class="live-attack-row">
+                    <span class="live-attack-label">Attacker IP:</span>
+                    <span id="liveAttackIp" class="live-attack-value">—</span>
+                  </div>
+                  <div class="live-attack-row">
+                    <span class="live-attack-label">Threat Level:</span>
+                    <span id="liveAttackSeverity" class="live-attack-value live-attack-severity">—</span>
+                  </div>
+                  <div class="live-attack-row">
+                    <span class="live-attack-label">Detection Time:</span>
+                    <span id="liveAttackTime" class="live-attack-value">—</span>
+                  </div>
+                  <div class="live-attack-row">
+                    <span class="live-attack-label">Network:</span>
+                    <span id="liveAttackNetwork" class="live-attack-value live-attack-network">GLOBAL</span>
+                  </div>
+                  <div class="live-attack-actions">
+                    <button type="button" id="liveAttackViewLocation" class="live-attack-button-link">View Exact Location →</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="threat-map-legend">
+              <span class="legend-item"><span class="legend-dot legend-critical"></span> Critical</span>
+              <span class="legend-item"><span class="legend-dot legend-high"></span> High</span>
+              <span class="legend-item"><span class="legend-dot legend-medium"></span> Medium</span>
+              <span class="legend-item"><span class="legend-dot legend-low"></span> Low</span>
+              <span class="legend-item"><span class="legend-dot legend-source"></span> Source</span>
+              <span class="legend-item"><span class="legend-dot legend-destination"></span> Destination</span>
+            </div>
+            <div class="live-map-analytics">
+              <div class="map-metrics-row">
+                <div class="map-metric">
+                  <span class="map-metric-label">Critical</span>
+                  <span class="map-metric-value" id="mapCriticalCount">0</span>
+                </div>
+                <div class="map-metric">
+                  <span class="map-metric-label">High</span>
+                  <span class="map-metric-value" id="mapHighCount">0</span>
+                </div>
+                <div class="map-metric">
+                  <span class="map-metric-label">Medium</span>
+                  <span class="map-metric-value" id="mapMediumCount">0</span>
+                </div>
+                <div class="map-metric">
+                  <span class="map-metric-label">Low</span>
+                  <span class="map-metric-value" id="mapLowCount">0</span>
+                </div>
+                <div class="map-metric">
+                  <span class="map-metric-label">Source Locations</span>
+                  <span class="map-metric-value" id="mapSourceLocations">0</span>
+                </div>
+                <div class="map-metric">
+                  <span class="map-metric-label">Destination Locations</span>
+                  <span class="map-metric-value" id="mapDestLocations">0</span>
+                </div>
+              </div>
+              <div class="map-paths-section">
+                <div class="map-paths-header">
+                  <span>Time</span>
+                  <span>From</span>
+                  <span>To</span>
+                  <span>Threat Type</span>
+                  <span>Severity</span>
+                </div>
+                <div id="mapPathsBody" class="map-paths-body">
+                  <div class="map-paths-empty">No attack paths yet</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+        <!-- 3D Threat Globe Panel -->
+        <section class="panel">
+          <h2 class="panel-title">3D Threat Globe</h2>
+          <p class="panel-text">Interactive 3D globe showing live attacks and their destinations. Drag to rotate, scroll to zoom.</p>
+          <div class="threat-globe-container" id="threatGlobeContainer">
+            <div class="globe-loading">Loading 3D globe...</div>
+            <div class="globe-side-info globe-side-info-left">
+              <div class="globe-side-label" id="globeThreatLabel">Threat: No selection</div>
+              <div class="globe-side-sub" id="globeSourceLabel">Source: No IP</div>
+              <div class="globe-side-sub" id="globeDestLabel">Destination: No IP</div>
+            </div>
+            <div class="globe-side-info globe-side-info-right">
+              <div class="globe-side-sub" id="globeIpLabel">IPs: No IP</div>
+            </div>
+            <div class="globe-info-overlay" id="globeRouteInfo"></div>
+          </div>
+        </section>
+
+        <!-- Threat Database Storage Panel -->
+        <section class="panel">
+          <h2 class="panel-title">Threat Database Storage</h2>
+          <p class="panel-text">Supported databases and cloud providers for safely storing live threat events.</p>
+          <div class="db-layout">
+            <div class="db-column">
+              <div class="db-column-title">SQL Databases</div>
+              <div class="db-grid">
+                <div class="db-card">
+                  <div class="db-card-title">SQLite</div>
+                  <div class="db-card-badge db-badge-active">Active (Local)</div>
+                  <div class="db-card-actions">
+                    <button class="secondary-button db-btn db-save" type="button" data-db="sqlite">Save</button>
+                    <button class="secondary-button db-btn db-view" type="button" data-db="sqlite">View Saved</button>
+                  </div>
+                </div>
+                <div class="db-card">
+                  <div class="db-card-title">MySQL</div>
+                  <div class="db-card-badge db-badge-planned">Configurable</div>
+                  <div class="db-card-actions">
+                    <button class="secondary-button db-btn db-save" type="button" data-db="mysql">Save</button>
+                    <button class="secondary-button db-btn db-view" type="button" data-db="mysql">View Saved</button>
+                  </div>
+                </div>
+                <div class="db-card">
+                  <div class="db-card-title">SQLite (External)</div>
+                  <div class="db-card-badge db-badge-planned">Configurable</div>
+                  <div class="db-card-actions">
+                    <button class="secondary-button db-btn db-save" type="button" data-db="sqlite_external">Save</button>
+                    <button class="secondary-button db-btn db-view" type="button" data-db="sqlite_external">View Saved</button>
+                  </div>
+                </div>
+                <div class="db-card">
+                  <div class="db-card-title">MariaDB</div>
+                  <div class="db-card-badge db-badge-planned">Configurable</div>
+                  <div class="db-card-actions">
+                    <button class="secondary-button db-btn db-save" type="button" data-db="mariadb">Save</button>
+                    <button class="secondary-button db-btn db-view" type="button" data-db="mariadb">View Saved</button>
+                  </div>
+                </div>
+                <div class="db-card">
+                  <div class="db-card-title">Redis</div>
+                  <div class="db-card-badge db-badge-planned">Configurable</div>
+                  <div class="db-card-actions">
+                    <button class="secondary-button db-btn db-save" type="button" data-db="redis">Save</button>
+                    <button class="secondary-button db-btn db-view" type="button" data-db="redis">View Saved</button>
+                  </div>
+                </div>
+                <div class="db-card">
+                  <div class="db-card-title">Cassandra</div>
+                  <div class="db-card-badge db-badge-planned">Configurable</div>
+                  <div class="db-card-actions">
+                    <button class="secondary-button db-btn db-save" type="button" data-db="cassandra">Save</button>
+                    <button class="secondary-button db-btn db-view" type="button" data-db="cassandra">View Saved</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="db-column">
+              <div class="db-column-title db-column-title-cloud">Cloud Storage</div>
+              <div class="db-grid">
+                <div class="db-card">
+                  <div class="db-card-title">MongoDB Atlas</div>
+                  <div class="db-card-badge db-badge-planned">Configurable</div>
+                  <div class="db-card-actions">
+                    <button class="secondary-button db-btn db-save" type="button" data-db="mongodb">Save</button>
+                    <button class="secondary-button db-btn db-view" type="button" data-db="mongodb">View Saved</button>
+                  </div>
+                </div>
+                <div class="db-card">
+                  <div class="db-card-title">Microsoft Azure</div>
+                  <div class="db-card-badge db-badge-planned">Configurable</div>
+                  <div class="db-card-actions">
+                    <button class="secondary-button db-btn db-save" type="button" data-db="sqlserver">Save</button>
+                    <button class="secondary-button db-btn db-view" type="button" data-db="sqlserver">View Saved</button>
+                  </div>
+                </div>
+                <div class="db-card">
+                  <div class="db-card-title">Google Cloud Platform (GCP)</div>
+                  <div class="db-card-badge db-badge-planned">Configurable</div>
+                  <div class="db-card-actions">
+                    <button class="secondary-button db-btn db-save" type="button" data-db="postgresql">Save</button>
+                    <button class="secondary-button db-btn db-view" type="button" data-db="postgresql">View Saved</button>
+                  </div>
+                </div>
+                <div class="db-card">
+                  <div class="db-card-title">Amazon Web Services (AWS)</div>
+                  <div class="db-card-badge db-badge-planned">Configurable</div>
+                  <div class="db-card-actions">
+                    <button class="secondary-button db-btn db-save" type="button" data-db="dynamodb">Save</button>
+                    <button class="secondary-button db-btn db-view" type="button" data-db="dynamodb">View Saved</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- AIP Data Analysis Panel -->
+        <section class="panel">
+          <h2 class="panel-title">AIP Data Analysis</h2>
+          <p class="panel-text">Connect an AI model via API key to analyze stored threat events and generate risk insights.</p>
+
+          <div class="card-group aip-card-group">
+            <div class="sub-panel aip-main-panel">
+              <h3 class="sub-panel-title">API Configuration &amp; Summary</h3>
+              <form id="aipConfigForm" class="form">
+                <label class="field-label" for="aipApiKey">API Key</label>
+                <input id="aipApiKey" class="text-input" type="password" placeholder="Enter your AI provider API key" />
+
+                <label class="field-label" for="aipModel">Model</label>
+                <input id="aipModel" class="text-input" type="text" placeholder="e.g. threat-analyzer-1" />
+
+                <button id="aipRunButton" class="primary-button" type="submit">Run Analysis</button>
+
+                <div id="aipError" class="db-config-error"></div>
+              </form>
+
+              <div class="metrics-row">
+                <div class="metric-card">
+                  <span class="metric-label">Status</span>
+                  <span class="metric-value" id="aipStatusText">Not analyzed yet.</span>
+                </div>
+                <div class="metric-card">
+                  <span class="metric-label">Total Records</span>
+                  <span class="metric-value" id="aipTotalRecords">0</span>
+                </div>
+                <div class="metric-card">
+                  <span class="metric-label">Threats Detected</span>
+                  <span class="metric-value" id="aipThreatsDetected">0</span>
+                </div>
+                <div class="metric-card">
+                  <span class="metric-label">Risk Score</span>
+                  <span class="metric-value" id="aipRiskScore">0.00</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="sub-panel aip-chart-panel">
+              <h3 class="sub-panel-title">24-Hour Threat Timeline</h3>
+              <canvas id="aipTimelineChart"></canvas>
+            </div>
+
+            <div class="sub-panel aip-chart-panel">
+              <h3 class="sub-panel-title">Machine Learning Predictions (12-Month Forecast)</h3>
+              <canvas id="aipForecastChart"></canvas>
+            </div>
+
+            <div class="sub-panel aip-chart-panel">
+              <h3 class="sub-panel-title">Threat Category Analysis</h3>
+              <canvas id="aipCategoryChart"></canvas>
+            </div>
+          </div>
+        </section>
+
+        <!-- Automated Threat Hunting Panel -->
+        <section class="panel">
+          <div class="th-hunt-header">
+            <div class="th-hunt-title">
+              <h2 class="panel-title">Automated Threat Hunting</h2>
+            </div>
+            <div class="th-hunt-actions">
+              <button id="thHuntStart" class="primary-button" type="button">Start Hunt</button>
+              <button id="thHuntStop" class="secondary-button" type="button" disabled>Stop</button>
+            </div>
+          </div>
+
+          <div class="th-hunt-metrics-row">
+            <div class="th-hunt-metric-card">
+              <div class="metric-label">Indicators Searched</div>
+              <div id="thHuntIndicators" class="metric-value">0</div>
+            </div>
+            <div class="th-hunt-metric-card">
+              <div class="metric-label">Matches Found</div>
+              <div id="thHuntMatches" class="metric-value th-hunt-metric-accent">0</div>
+            </div>
+            <div class="th-hunt-metric-card">
+              <div class="metric-label">Critical Findings</div>
+              <div id="thHuntCritical" class="metric-value th-hunt-metric-critical">0</div>
+            </div>
+          </div>
+
+          <h3 class="th-hunt-subtitle">Indicators of Compromise</h3>
+          <div id="thHuntEmpty" class="th-hunt-empty">Click "Start Hunt" to begin proactive threat hunting.</div>
+          <div id="thHuntResults" class="th-hunt-results"></div>
+        </section>
+
+        <!-- Chatbot Floating Widget -->
+        <div id="chatWidget" class="chat-widget">
+          <button id="chatLauncher" class="chat-launcher-button" type="button">
+            <span class="chat-launcher-icon">AI</span>
+          </button>
+
+          <div id="chatWindow" class="chat-window">
+            <div class="chat-window-header">
+              <div class="chat-header-left">
+                <span class="chat-header-icon">AI</span>
+                <span class="chat-header-title">Security AI Assistant</span>
+              </div>
+              <div class="chat-header-right">
+                <button id="chatWindowExpand" class="chat-header-expand" type="button">⤢</button>
+                <button id="chatWindowClose" class="chat-header-close" type="button">×</button>
+              </div>
+            </div>
+
+            <div class="chat-window-body">
+              <div id="chatMessages" class="chat-messages"></div>
+            </div>
+
+            <div class="chat-window-footer">
+              <div class="chat-input-row">
+                <input id="chatInput" class="text-input chat-input" type="text" placeholder="Ask about threats, get security advice..." />
+                <button id="chatSendButton" class="primary-button chat-send-button" type="button">Send</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- Database Configuration Modal -->
+      <div id="dbConfigModal" class="db-config-modal">
+        <div id="dbConfigBackdrop" class="db-config-backdrop"></div>
+        <div class="db-config-dialog">
+          <h3 class="db-config-title">Configure <span id="dbConfigDatabaseLabel">Database</span> Connection</h3>
+          <p class="db-config-subtitle">Enter connection details to store live threats in this database.</p>
+
+          <div id="dbConfigMySqlFields" class="db-config-fields">
+            <div class="db-config-field">
+              <label for="dbConfigHost">Host</label>
+              <input id="dbConfigHost" type="text" class="text-input" placeholder="e.g. 127.0.0.1" />
+            </div>
+            <div class="db-config-field">
+              <label for="dbConfigPort">Port</label>
+              <input id="dbConfigPort" type="text" class="text-input" placeholder="3306" />
+            </div>
+            <div class="db-config-field">
+              <label for="dbConfigDatabase">Database</label>
+              <input id="dbConfigDatabase" type="text" class="text-input" placeholder="threats_db" />
+            </div>
+            <div class="db-config-field">
+              <label for="dbConfigUser">User</label>
+              <input id="dbConfigUser" type="text" class="text-input" placeholder="e.g. root" />
+            </div>
+            <div class="db-config-field">
+              <label for="dbConfigPassword">Password</label>
+              <input id="dbConfigPassword" type="password" class="text-input" placeholder="••••••••" />
+            </div>
+          </div>
+
+          <div id="dbConfigSqliteFields" class="db-config-fields">
+            <div class="db-config-field">
+              <label for="dbConfigPath">Database file path</label>
+              <input id="dbConfigPath" type="text" class="text-input" placeholder="e.g. external_threats.db" />
+            </div>
+          </div>
+
+          <div id="dbConfigMongoFields" class="db-config-fields">
+            <div class="db-config-field">
+              <label for="dbConfigMongoUri">MongoDB connection URI</label>
+              <input id="dbConfigMongoUri" type="text" class="text-input" placeholder="e.g. mongodb://localhost:27017" />
+            </div>
+            <div class="db-config-field">
+              <label for="dbConfigMongoDatabase">Database (optional)</label>
+              <input id="dbConfigMongoDatabase" type="text" class="text-input" placeholder="default: security_dashboard" />
+            </div>
+            <div class="db-config-field">
+              <label for="dbConfigMongoCollection">Collection (optional)</label>
+              <input id="dbConfigMongoCollection" type="text" class="text-input" placeholder="default: threat_events" />
+            </div>
+          </div>
+
+          <div id="dbConfigRedisFields" class="db-config-fields">
+            <div class="db-config-field">
+              <label for="dbConfigRedisUrl">Redis URL</label>
+              <input id="dbConfigRedisUrl" type="text" class="text-input" placeholder="e.g. redis://localhost:6379/0" />
+            </div>
+            <div class="db-config-field">
+              <label for="dbConfigRedisKey">Key / List name (optional)</label>
+              <input id="dbConfigRedisKey" type="text" class="text-input" placeholder="default: threat_events" />
+            </div>
+          </div>
+
+          <div id="dbConfigDynamoFields" class="db-config-fields">
+            <div class="db-config-field">
+              <label for="dbConfigDynamoTable">DynamoDB table name</label>
+              <input id="dbConfigDynamoTable" type="text" class="text-input" placeholder="e.g. threat_events" />
+            </div>
+            <div class="db-config-field">
+              <label for="dbConfigDynamoRegion">Region (optional)</label>
+              <input id="dbConfigDynamoRegion" type="text" class="text-input" placeholder="e.g. us-east-1" />
+            </div>
+            <div class="db-config-field">
+              <label for="dbConfigDynamoEndpoint">Endpoint URL (optional)</label>
+              <input id="dbConfigDynamoEndpoint" type="text" class="text-input" placeholder="Custom endpoint or leave blank" />
+            </div>
+          </div>
+
+          <div id="dbConfigError" class="db-config-error"></div>
+
+          <div class="db-config-actions">
+            <button id="dbConfigCancel" type="button" class="secondary-button">Cancel</button>
+            <button id="dbConfigConfirm" type="button" class="primary-button">Connect</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>
+      const staticSummaryData = {{ static_summary|tojson|safe }};
+      const staticDashboard = {{ static_dashboard|tojson|safe }};
+
+      let dbConfigCurrentKey = null;
+      let dbConfigCurrentBadge = null;
+      let aipTimelineChart = null;
+      let aipForecastChart = null;
+      let aipCategoryChart = null;
+      let threatHuntTimer = null;
+      let threatHuntActive = false;
+
+      function setupDbConfigModal() {
+        const modal = document.getElementById('dbConfigModal');
+        if (!modal) return null;
+
+        const backdrop = document.getElementById('dbConfigBackdrop');
+        const cancelBtn = document.getElementById('dbConfigCancel');
+        const confirmBtn = document.getElementById('dbConfigConfirm');
+        const errorEl = document.getElementById('dbConfigError');
+        const dbLabelEl = document.getElementById('dbConfigDatabaseLabel');
+        const mysqlFields = document.getElementById('dbConfigMySqlFields');
+        const sqliteFields = document.getElementById('dbConfigSqliteFields');
+        const mongoFields = document.getElementById('dbConfigMongoFields');
+        const redisFields = document.getElementById('dbConfigRedisFields');
+        const dynamoFields = document.getElementById('dbConfigDynamoFields');
+        const postgresqlFields = document.getElementById('dbConfigPostgresqlFields');
+        const mariadbFields = document.getElementById('dbConfigMariadbFields');
+
+        const hostInput = document.getElementById('dbConfigHost');
+        const portInput = document.getElementById('dbConfigPort');
+        const dbInput = document.getElementById('dbConfigDatabase');
+        const userInput = document.getElementById('dbConfigUser');
+        const passInput = document.getElementById('dbConfigPassword');
+        const pathInput = document.getElementById('dbConfigPath');
+
+        const mongoUriInput = document.getElementById('dbConfigMongoUri');
+        const mongoDbInput = document.getElementById('dbConfigMongoDatabase');
+        const mongoCollInput = document.getElementById('dbConfigMongoCollection');
+
+        const redisUrlInput = document.getElementById('dbConfigRedisUrl');
+        const redisKeyInput = document.getElementById('dbConfigRedisKey');
+
+        const dynamoTableInput = document.getElementById('dbConfigDynamoTable');
+        const dynamoRegionInput = document.getElementById('dbConfigDynamoRegion');
+        const dynamoEndpointInput = document.getElementById('dbConfigDynamoEndpoint');
+
+        function resetFields() {
+          if (hostInput) hostInput.value = '';
+          if (portInput) portInput.value = '';
+          if (dbInput) dbInput.value = '';
+          if (userInput) userInput.value = '';
+          if (passInput) passInput.value = '';
+          if (pathInput) pathInput.value = '';
+          if (mongoUriInput) mongoUriInput.value = '';
+          if (mongoDbInput) mongoDbInput.value = '';
+          if (mongoCollInput) mongoCollInput.value = '';
+          if (redisUrlInput) redisUrlInput.value = '';
+          if (redisKeyInput) redisKeyInput.value = '';
+          if (dynamoTableInput) dynamoTableInput.value = '';
+          if (dynamoRegionInput) dynamoRegionInput.value = '';
+          if (dynamoEndpointInput) dynamoEndpointInput.value = '';
+          if (errorEl) errorEl.textContent = '';
+        }
+
+        function openModal(dbKey, badge) {
+          if (!modal) return;
+          dbConfigCurrentKey = dbKey;
+          dbConfigCurrentBadge = badge;
+          resetFields();
+
+          const label = dbKey ? dbKey.toUpperCase() : 'Database';
+          if (dbLabelEl) dbLabelEl.textContent = label;
+
+          // Toggle field groups based on db type
+          const showSql =
+            dbKey === 'mysql' ||
+            dbKey === 'postgresql' ||
+            dbKey === 'mariadb' ||
+            dbKey === 'cassandra' ||
+            dbKey === 'sqlserver';
+          if (mysqlFields) mysqlFields.style.display = showSql ? 'block' : 'none';
+          if (sqliteFields) sqliteFields.style.display = dbKey === 'sqlite_external' ? 'block' : 'none';
+          if (mongoFields) mongoFields.style.display = dbKey === 'mongodb' ? 'block' : 'none';
+          if (redisFields) redisFields.style.display = dbKey === 'redis' ? 'block' : 'none';
+          if (dynamoFields) dynamoFields.style.display = dbKey === 'dynamodb' ? 'block' : 'none';
+          if (postgresqlFields) postgresqlFields.style.display = dbKey === 'postgresql' ? 'block' : 'none';
+          if (mariadbFields) mariadbFields.style.display = dbKey === 'mariadb' ? 'block' : 'none';
+
+          // Default ports for SQL-style databases
+          if (portInput) {
+            if (dbKey === 'mysql' || dbKey === 'mariadb') {
+              portInput.value = '3306';
+            } else if (dbKey === 'postgresql') {
+              portInput.value = '5432';
+            } else if (dbKey === 'cassandra') {
+              portInput.value = '9042';
+            } else if (dbKey === 'sqlserver') {
+              portInput.value = '1433';
+            }
+          }
+
+          modal.classList.add('open');
+        }
+
+        function closeModal() {
+          if (!modal) return;
+          modal.classList.remove('open');
+        }
+
+        if (backdrop) {
+          backdrop.addEventListener('click', closeModal);
+        }
+        if (cancelBtn) {
+          cancelBtn.addEventListener('click', closeModal);
+        }
+        if (confirmBtn) {
+          confirmBtn.addEventListener('click', async () => {
+            if (!dbConfigCurrentKey) return;
+            const payload = {};
+
+            if (
+              dbConfigCurrentKey === 'mysql' ||
+              dbConfigCurrentKey === 'postgresql' ||
+              dbConfigCurrentKey === 'mariadb' ||
+              dbConfigCurrentKey === 'cassandra' ||
+              dbConfigCurrentKey === 'sqlserver'
+            ) {
+              if (hostInput) payload.host = hostInput.value.trim();
+              if (portInput) payload.port = portInput.value.trim();
+              if (dbInput) payload.database = dbInput.value.trim();
+              if (userInput) payload.user = userInput.value.trim();
+              if (passInput) payload.password = passInput.value;
+            } else if (dbConfigCurrentKey === 'sqlite_external') {
+              if (pathInput) payload.path = pathInput.value.trim();
+            } else if (dbConfigCurrentKey === 'mongodb') {
+              if (mongoUriInput) payload.uri = mongoUriInput.value.trim();
+              if (mongoDbInput) payload.database = mongoDbInput.value.trim();
+              if (mongoCollInput) payload.collection = mongoCollInput.value.trim();
+            } else if (dbConfigCurrentKey === 'redis') {
+              if (redisUrlInput) payload.url = redisUrlInput.value.trim();
+              if (redisKeyInput) payload.key = redisKeyInput.value.trim();
+            } else if (dbConfigCurrentKey === 'dynamodb') {
+              if (dynamoTableInput) payload.table = dynamoTableInput.value.trim();
+              if (dynamoRegionInput) payload.region = dynamoRegionInput.value.trim();
+              if (dynamoEndpointInput) payload.endpoint = dynamoEndpointInput.value.trim();
+            }
+
+            if (!Object.keys(payload).length) {
+              if (errorEl) errorEl.textContent = 'UI configuration is not yet supported for this database type.';
+              return;
+            }
+
+            try {
+              confirmBtn.disabled = true;
+              const res = await fetch(`/api/configure_db/${encodeURIComponent(dbConfigCurrentKey)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+              });
+              const data = await res.json().catch(() => ({}));
+              const ok = res.ok && data && data.ok;
+              if (!ok) {
+                const msg = (data && data.message) || `Unable to configure ${dbConfigCurrentKey}. Please check details.`;
+                if (errorEl) errorEl.textContent = msg;
+                return;
+              }
+
+              if (dbConfigCurrentBadge) {
+                dbConfigCurrentBadge.textContent = 'Active (Live)';
+                dbConfigCurrentBadge.classList.remove('db-badge-planned');
+                dbConfigCurrentBadge.classList.add('db-badge-active');
+              }
+
+              closeModal();
+              if (data && data.message) {
+                alert(data.message);
+              }
+            } catch (err) {
+              console.error('Error configuring DB', err);
+              if (errorEl) {
+                errorEl.textContent = 'Network or server error while configuring database.';
+              }
+            } finally {
+              confirmBtn.disabled = false;
+            }
+          });
+        }
+
+        return openModal;
+      }
+
+      let openDbConfigModal = null;
+
+      // Dialogue & speech datasets (for explanations inside the chatbot)
+      const CHATBOT_DIALOG_DATASETS = [
+        'Cornell Movie Dialogs Corpus',
+        'DailyDialog',
+        'Persona-Chat',
+        'MultiWOZ (Multi-Domain Wizard-of-Oz)',
+        'Taskmaster Dataset',
+        'ConvAI2 Dataset',
+        'Empathetic Dialogues',
+        'DSTC (Dialog State Tracking Challenge) Datasets',
+        'Topical-Chat (Alexa)',
+        'OpenSubtitles Dialog Corpus',
+        'CoQA (Conversational Question Answering)',
+        'SQuAD',
+        'QuAC (Question Answering in Context)',
+        'Human-Human Dialogue Dataset (HHH)',
+        'Reddit Conversations Dataset'
+      ];
+
+      const VOICE_RECOGNITION_DATASETS = [
+        'LibriSpeech',
+        'Common Voice (Mozilla)',
+        'TED-LIUM',
+        'VoxCeleb 1 & 2',
+        'Google Speech Commands Dataset',
+        'AISHELL-1',
+        'AISHELL-2',
+        'TIMIT Acoustic-Phonetic Dataset',
+        'Librivox / LibriLight',
+        'CHiME Speech Datasets',
+        'SWITCHBOARD Telephone Speech Corpus',
+        'AMI Meeting Corpus',
+        'WSJ Speech Corpus (Wall Street Journal)',
+        'Fisher English Training Speech',
+        'VoxForge'
+      ];
+
+      if (staticSummaryData && document.getElementById("staticThreatChart")) {
+        const ctx = document.getElementById("staticThreatChart").getContext("2d");
+        new Chart(ctx, {
+          type: "doughnut",
+          data: {
+            labels: ["Threat", "Safe"],
+            datasets: [
+              {
+                data: [staticSummaryData.threats, staticSummaryData.safe],
+                backgroundColor: ["#f97316", "#22c55e"],
+                borderColor: "#020617",
+                borderWidth: 1,
+              },
+            ],
+          },
+          options: {
+            plugins: {
+              legend: {
+                labels: {
+                  color: "#e5e7eb",
+                  font: {
+                    size: 11,
+                  },
+                },
+              },
+            },
+          },
+        });
+      }
+
+      function initThreatHuntingPanel() {
+        const startBtn = document.getElementById('thHuntStart');
+        const stopBtn = document.getElementById('thHuntStop');
+        const indicatorsEl = document.getElementById('thHuntIndicators');
+        const matchesEl = document.getElementById('thHuntMatches');
+        const criticalEl = document.getElementById('thHuntCritical');
+        const emptyEl = document.getElementById('thHuntEmpty');
+        const resultsEl = document.getElementById('thHuntResults');
+
+        if (!startBtn || !stopBtn || !indicatorsEl || !matchesEl || !criticalEl || !resultsEl) {
+          return;
+        }
+
+        function renderHuntState(state) {
+          if (!state) return;
+          if (typeof state.indicators_searched === 'number') {
+            indicatorsEl.textContent = state.indicators_searched.toString();
+          }
+          if (typeof state.matches_found === 'number') {
+            matchesEl.textContent = state.matches_found.toString();
+          }
+          if (typeof state.critical_findings === 'number') {
+            criticalEl.textContent = state.critical_findings.toString();
+          }
+
+          const iocs = Array.isArray(state.iocs) ? state.iocs : [];
+          resultsEl.innerHTML = '';
+          if (!iocs.length) {
+            if (emptyEl) emptyEl.style.display = 'block';
+            return;
+          }
+
+          if (emptyEl) emptyEl.style.display = 'none';
+
+          iocs.forEach((ioc) => {
+            const row = document.createElement('div');
+            row.className = 'th-hunt-ioc';
+
+            const header = document.createElement('div');
+            header.className = 'th-hunt-ioc-header';
+
+            const sevSpan = document.createElement('span');
+            const sev = (ioc.severity || 'Unknown').toString();
+            const sevClass = sev.toLowerCase();
+            let sevExtra = '';
+            if (sevClass === 'critical') sevExtra = ' th-hunt-severity-critical';
+            else if (sevClass === 'high') sevExtra = ' th-hunt-severity-high';
+            else if (sevClass === 'medium') sevExtra = ' th-hunt-severity-medium';
+            else sevExtra = ' th-hunt-severity-low';
+            sevSpan.className = 'th-hunt-ioc-severity' + sevExtra;
+            sevSpan.textContent = sev;
+
+            const typeSpan = document.createElement('span');
+            typeSpan.className = 'th-hunt-ioc-type';
+            typeSpan.textContent = ioc.indicator_type || 'Indicator';
+
+            const feedSpan = document.createElement('span');
+            feedSpan.className = 'th-hunt-ioc-feed';
+            if (ioc.feed) {
+              feedSpan.textContent = ioc.feed;
+            }
+
+            header.appendChild(sevSpan);
+            header.appendChild(typeSpan);
+            if (ioc.feed) header.appendChild(feedSpan);
+
+            const body = document.createElement('div');
+            body.className = 'th-hunt-ioc-body';
+
+            const valueSpan = document.createElement('span');
+            valueSpan.className = 'th-hunt-ioc-value';
+            valueSpan.textContent = ioc.value || '';
+
+            const detailSpan = document.createElement('span');
+            detailSpan.className = 'th-hunt-ioc-detail';
+            detailSpan.textContent = ioc.description || '';
+
+            body.appendChild(valueSpan);
+            if (ioc.description) body.appendChild(detailSpan);
+
+            row.appendChild(header);
+            row.appendChild(body);
+
+            resultsEl.appendChild(row);
+          });
+        }
+
+        async function callHuntApi(path) {
+          try {
+            const res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+            const data = await res.json().catch(() => null);
+            if (!res.ok || !data || data.ok === false) {
+              return null;
+            }
+            return data;
+          } catch (err) {
+            console.error('Threat hunt API error', err);
+            return null;
+          }
+        }
+
+        startBtn.addEventListener('click', async () => {
+          if (threatHuntActive) return;
+          startBtn.disabled = true;
+          stopBtn.disabled = false;
+          threatHuntActive = true;
+
+          const state = await callHuntApi('/api/threat_hunt/start');
+          if (state) renderHuntState(state);
+
+          if (threatHuntTimer) clearInterval(threatHuntTimer);
+          threatHuntTimer = setInterval(async () => {
+            if (!threatHuntActive) return;
+            const stepState = await callHuntApi('/api/threat_hunt/step');
+            if (stepState) renderHuntState(stepState);
+          }, 2500);
+        });
+
+        stopBtn.addEventListener('click', async () => {
+          if (!threatHuntActive) return;
+          threatHuntActive = false;
+          stopBtn.disabled = true;
+          startBtn.disabled = false;
+          if (threatHuntTimer) {
+            clearInterval(threatHuntTimer);
+            threatHuntTimer = null;
+          }
+          await callHuntApi('/api/threat_hunt/stop');
+        });
+      }
+
+      if (staticDashboard && document.getElementById("staticSeverityChart")) {
+        const ctx2 = document.getElementById("staticSeverityChart").getContext("2d");
+        new Chart(ctx2, {
+          type: "bar",
+          data: {
+            labels: staticDashboard.severity_labels,
+            datasets: [
+              {
+                label: "Count",
+                data: staticDashboard.severity_counts,
+                backgroundColor: ["#ef4444", "#f97316", "#eab308", "#22c55e", "#38bdf8"],
+              },
+            ],
+          },
+          options: {
+            scales: {
+              x: {
+                ticks: {
+                  color: "#9ca3af",
+                  font: { size: 10 },
+                },
+                grid: {
+                  color: "rgba(30, 64, 175, 0.4)",
+                },
+              },
+              y: {
+                ticks: {
+                  color: "#9ca3af",
+                  font: { size: 10 },
+                },
+                grid: {
+                  color: "rgba(30, 64, 175, 0.25)",
+                },
+              },
+            },
+            plugins: {
+              legend: {
+                labels: {
+                  color: "#e5e7eb",
+                  font: { size: 10 },
+                },
+              },
+            },
+          },
+        });
+      }
+
+      if (staticDashboard && document.getElementById("staticRiskCurveChart")) {
+        const ctx3 = document
+          .getElementById("staticRiskCurveChart")
+          .getContext("2d");
+        new Chart(ctx3, {
+          type: "line",
+          data: {
+            labels: staticDashboard.risk_curve.indices,
+            datasets: [
+              {
+                label: "Threat Probability",
+                data: staticDashboard.risk_curve.probabilities,
+                borderColor: "#22d3ee",
+                backgroundColor: "rgba(34, 211, 238, 0.15)",
+                pointRadius: 1.5,
+                tension: 0.25,
+              },
+            ],
+          },
+          options: {
+            scales: {
+              x: {
+                ticks: {
+                  color: "#9ca3af",
+                  font: { size: 9 },
+                },
+                grid: {
+                  color: "rgba(30, 64, 175, 0.25)",
+                },
+                title: {
+                  display: true,
+                  text: "Record Index",
+                  color: "#9ca3af",
+                  font: { size: 10 },
+                },
+              },
+              y: {
+                min: 0,
+                max: 1,
+                ticks: {
+                  color: "#9ca3af",
+                  font: { size: 9 },
+                },
+                grid: {
+                  color: "rgba(30, 64, 175, 0.25)",
+                },
+                title: {
+                  display: true,
+                  text: "Threat Probability",
+                  color: "#9ca3af",
+                  font: { size: 10 },
+                },
+              },
+            },
+            plugins: {
+              legend: {
+                labels: {
+                  color: "#e5e7eb",
+                  font: { size: 10 },
+                },
+              },
+            },
+          },
+        });
+      }
+
+      function initAipPanel() {
+        const form = document.getElementById('aipConfigForm');
+        const apiKeyInput = document.getElementById('aipApiKey');
+        const modelInput = document.getElementById('aipModel');
+        const statusEl = document.getElementById('aipStatusText');
+        const totalEl = document.getElementById('aipTotalRecords');
+        const threatsEl = document.getElementById('aipThreatsDetected');
+        const riskEl = document.getElementById('aipRiskScore');
+        const errorEl = document.getElementById('aipError');
+
+        if (!form) return;
+
+        const timelineCtx = document.getElementById('aipTimelineChart');
+        const forecastCtx = document.getElementById('aipForecastChart');
+        const categoryCtx = document.getElementById('aipCategoryChart');
+
+        if (timelineCtx && !aipTimelineChart) {
+          aipTimelineChart = new Chart(timelineCtx, {
+            type: 'line',
+            data: {
+              labels: [],
+              datasets: [{
+                label: 'Threats per Hour',
+                data: [],
+                borderColor: 'rgba(239, 68, 68, 1)',
+                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.3
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              layout: {
+                padding: { top: 18, right: 20, bottom: 18, left: 42 },
+              },
+              plugins: {
+                legend: { labels: { color: '#e5e7eb' } }
+              },
+              scales: {
+                x: { ticks: { color: '#9ca3af' } },
+                y: { beginAtZero: true, ticks: { color: '#9ca3af' } }
+              }
+            }
+          });
+        }
+
+        if (forecastCtx && !aipForecastChart) {
+          aipForecastChart = new Chart(forecastCtx, {
+            type: 'line',
+            data: {
+              labels: [],
+              datasets: [{
+                label: 'Predicted Monthly Threat Volume',
+                data: [],
+                borderColor: 'rgba(59, 130, 246, 1)',
+                backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.25
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              layout: {
+                padding: { top: 18, right: 20, bottom: 18, left: 42 },
+              },
+              plugins: {
+                legend: { labels: { color: '#e5e7eb' } }
+              },
+              scales: {
+                x: { ticks: { color: '#9ca3af' } },
+                y: { beginAtZero: true, ticks: { color: '#9ca3af' } }
+              }
+            }
+          });
+        }
+
+        if (categoryCtx && !aipCategoryChart) {
+          aipCategoryChart = new Chart(categoryCtx, {
+            type: 'bar',
+            data: {
+              labels: [],
+              datasets: [{
+                label: 'Count',
+                data: [],
+                backgroundColor: 'rgba(34, 197, 94, 0.6)',
+                borderColor: 'rgba(34, 197, 94, 1)',
+                borderWidth: 1
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              layout: {
+                padding: { top: 18, right: 20, bottom: 18, left: 42 },
+              },
+              plugins: {
+                legend: { labels: { color: '#e5e7eb' } }
+              },
+              scales: {
+                x: { ticks: { color: '#9ca3af' } },
+                y: { beginAtZero: true, ticks: { color: '#9ca3af' } }
+              }
+            }
+          });
+        }
+
+        form.addEventListener('submit', async (evt) => {
+          evt.preventDefault();
+          if (errorEl) errorEl.textContent = '';
+
+          const apiKey = apiKeyInput ? apiKeyInput.value.trim() : '';
+          const model = modelInput ? modelInput.value.trim() : '';
+
+          const runBtn = document.getElementById('aipRunButton');
+          if (runBtn) runBtn.disabled = true;
+
+          try {
+            const res = await fetch('/api/aip_analyze', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ api_key: apiKey, model }),
+            });
+
+            const data = await res.json().catch(() => null);
+            if (!res.ok || !data || data.ok === false) {
+              const msg = (data && data.message) || 'Analysis failed.';
+              if (errorEl) errorEl.textContent = msg;
+              return;
+            }
+
+            if (statusEl) statusEl.textContent = data.status_text || 'Analysis complete.';
+            if (totalEl) totalEl.textContent = (data.total_records != null ? data.total_records : 0);
+            if (threatsEl) threatsEl.textContent = (data.threats_detected != null ? data.threats_detected : 0);
+            if (riskEl) {
+              const score = (typeof data.risk_score === 'number') ? data.risk_score : 0;
+              riskEl.textContent = score.toFixed(2);
+            }
+
+            if (aipTimelineChart && data.timeline) {
+              aipTimelineChart.data.labels = data.timeline.labels || [];
+              aipTimelineChart.data.datasets[0].data = data.timeline.counts || [];
+              aipTimelineChart.update('none');
+            }
+
+            if (aipForecastChart && data.forecast) {
+              aipForecastChart.data.labels = data.forecast.labels || [];
+              aipForecastChart.data.datasets[0].data = data.forecast.counts || [];
+              aipForecastChart.update('none');
+            }
+
+            if (aipCategoryChart && data.categories) {
+              aipCategoryChart.data.labels = data.categories.labels || [];
+              aipCategoryChart.data.datasets[0].data = data.categories.counts || [];
+              aipCategoryChart.update('none');
+            }
+          } catch (err) {
+            console.error('Error running AIP analysis', err);
+            if (errorEl) errorEl.textContent = 'Error running analysis.';
+          } finally {
+            if (runBtn) runBtn.disabled = false;
+          }
+        });
+      }
+
+      // ===== Threat Database Storage Controls =====
+      function initDatabaseControls() {
+        const saveButtons = document.querySelectorAll('.db-save');
+        const viewButtons = document.querySelectorAll('.db-view');
+        const configBadges = document.querySelectorAll('.db-card-badge.db-badge-planned');
+
+        saveButtons.forEach((btn) => {
+          const dbKey = btn.dataset.db;
+          if (!dbKey) return;
+
+          btn.addEventListener('click', async () => {
+            btn.disabled = true;
+            try {
+              const res = await fetch(`/api/save/${encodeURIComponent(dbKey)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+              });
+              const data = await res.json().catch(() => ({}));
+              const msg = data && data.message
+                ? data.message
+                : `Saved ${data.saved || 0} threat events to ${dbKey}.`;
+              const extra = data && typeof data.total_saves === 'number'
+                ? ` Total saves for ${dbKey}: ${data.total_saves}.`
+                : '';
+              alert(msg + extra);
+            } catch (err) {
+              console.error(`Error saving threats for ${dbKey}`, err);
+              alert(`Failed to save threats for ${dbKey}.`);
+            } finally {
+              btn.disabled = false;
+            }
+          });
+        });
+
+        viewButtons.forEach((btn) => {
+          const dbKey = btn.dataset.db;
+          if (!dbKey) return;
+
+          btn.addEventListener('click', async () => {
+            try {
+              const res = await fetch(`/api/saves/${encodeURIComponent(dbKey)}`);
+              const data = await res.json().catch(() => ({}));
+              const saves = (data && Array.isArray(data.saves)) ? data.saves : [];
+              if (!saves.length) {
+                alert(`No saved snapshots yet for ${dbKey}.`);
+                return;
+              }
+
+              const summaryLines = saves.map((s) => {
+                const id = s.id;
+                const ts = s.timestamp || '';
+                const count = (typeof s.threat_count === 'number') ? s.threat_count : '?';
+                return `${id}: ${ts} (${count} threats)`;
+              });
+
+              const choice = prompt(
+                `Saved snapshots for ${dbKey} (total ${saves.length}):\n` +
+                summaryLines.join('\n') +
+                '\n\nEnter the snapshot number you want to download:'
+              );
+
+              if (!choice) return;
+              const snapshotId = parseInt(choice, 10);
+              if (!snapshotId || !saves.some((s) => s.id === snapshotId)) {
+                alert('Invalid snapshot selection.');
+                return;
+              }
+
+              window.location.href = `/download/snapshot/${encodeURIComponent(dbKey)}/${snapshotId}`;
+            } catch (err) {
+              console.error(`Error loading snapshots for ${dbKey}`, err);
+              alert(`Failed to load saved snapshots for ${dbKey}.`);
+            }
+          });
+        });
+
+        const canOpenModal = typeof openDbConfigModal === 'function';
+
+        configBadges.forEach((badge) => {
+          const card = badge.closest('.db-card');
+          if (!card || !canOpenModal) return;
+          const saveBtn = card.querySelector('.db-save');
+          const dbKey = saveBtn ? saveBtn.dataset.db : null;
+          if (!dbKey) return;
+
+          badge.style.cursor = 'pointer';
+          badge.addEventListener('click', () => {
+            openDbConfigModal(dbKey, badge);
+          });
+        });
+      }
+
+      // ===== Live Threat Monitoring =====
+      const socket = io();
+      let clientMonitoringActive = false;
+      let severityChart, threatTypeChart, attackCategoryChart, timelineChart;
+      let threatTypeData = {};
+      let attackCategoryData = {};
+      let timelineData = {
+        threats: [],
+        safe: [],
+        labels: []
+      };
+      const MAX_TIMELINE_POINTS = 30; // 60 seconds with 2-second updates
+      let threatMapContainer = null;
+      let threatMap = null;
+      let threatMapLayer = null;
+      let threatMarkers = [];
+      const MAX_MAP_POINTS = 80;
+
+      // Live Threat Map summary state
+      const mapSourceSet = new Set();
+      const mapDestSet = new Set();
+
+      // Fetch and update WiFi status
+      function updateWiFiStatus() {
+        fetch('/api/wifi_status')
+          .then(response => response.json())
+          .then(data => {
+            // Update WiFi card
+            document.getElementById('wifiSSID').textContent = data.ssid || 'Unknown';
+            document.getElementById('wifiSignal').textContent = (data.signal_strength || 0) + '%';
+            document.getElementById('wifiEncryption').textContent = data.encryption || 'Unknown';
+            document.getElementById('wifiSecurity').textContent = (data.protection_score || 0) + '% SECURE';
+            
+            // Update WiFi indicator based on protection score
+            const wifiIndicator = document.querySelector('.wifi-card .status-indicator');
+            if (wifiIndicator) {
+              if (data.protection_score >= 70) {
+                wifiIndicator.className = 'status-indicator online';
+              } else if (data.protection_score >= 40) {
+                wifiIndicator.className = 'status-indicator warning';
+              } else {
+                wifiIndicator.className = 'status-indicator offline';
+              }
+            }
+            
+            // Update security color based on score
+            const securityElement = document.getElementById('wifiSecurity');
+            if (securityElement) {
+              if (data.protection_score >= 70) {
+                securityElement.style.color = '#10b981';
+                securityElement.style.background = 'rgba(16, 185, 129, 0.1)';
+              } else if (data.protection_score >= 40) {
+                securityElement.style.color = '#f59e0b';
+                securityElement.style.background = 'rgba(245, 158, 11, 0.1)';
+              } else {
+                securityElement.style.color = '#ef4444';
+                securityElement.style.background = 'rgba(239, 68, 68, 0.1)';
+              }
+            }
+            
+            // Update VPN card
+            const vpnServer = data.vpn_server || 'Direct Connection';
+            const vpnProtocol = data.vpn_protocol || 'None';
+            const vpnStatus = data.vpn_status || 'Disconnected';
+            
+            document.getElementById('vpnServer').textContent = vpnServer;
+            document.getElementById('vpnProtocol').textContent = vpnProtocol;
+            
+            // Update VPN status badge
+            const vpnStatusBadge = document.getElementById('vpnStatus');
+            if (vpnStatusBadge) {
+              if (vpnStatus === 'Connected') {
+                vpnStatusBadge.textContent = 'Connected';
+                vpnStatusBadge.className = 'status-badge connected';
+              } else {
+                vpnStatusBadge.textContent = 'Disconnected';
+                vpnStatusBadge.className = 'status-badge disconnected';
+              }
+            }
+            
+            // Update VPN indicator
+            const vpnIndicator = document.getElementById('vpnIndicator');
+            if (vpnIndicator) {
+              if (vpnStatus === 'Connected') {
+                vpnIndicator.className = 'status-indicator online';
+              } else {
+                vpnIndicator.className = 'status-indicator offline';
+              }
+            }
+          })
+          .catch(error => console.error('Error fetching WiFi status:', error));
+      }
+
+      function updateModelAccuracy() {
+        const valueEl = document.getElementById('modelAccuracyValue');
+        if (!valueEl) return;
+        fetch('/api/model_accuracy')
+          .then(res => res.json())
+          .then((data) => {
+            if (!data || data.ok === false) return;
+            const acc = (typeof data.accuracy === 'number') ? data.accuracy : null;
+            if (acc == null) return;
+            valueEl.textContent = acc.toFixed(2) + '%';
+          })
+          .catch((err) => {
+            console.error('Error fetching model accuracy', err);
+          });
+      }
+
+      // Initialize charts
+      function initLiveCharts() {
+        // Severity Chart
+        const severityCtx = document.getElementById('severityChart');
+        if (severityCtx) {
+          severityChart = new Chart(severityCtx, {
+            type: 'doughnut',
+            data: {
+              labels: ['Critical', 'High', 'Medium', 'Low'],
+              datasets: [{
+                data: [0, 0, 0, 0],
+                backgroundColor: [
+                  'rgba(239, 68, 68, 0.8)',
+                  'rgba(249, 115, 22, 0.8)',
+                  'rgba(234, 179, 8, 0.8)',
+                  'rgba(34, 197, 94, 0.8)'
+                ],
+                borderColor: ['#ef4444', '#f97316', '#eab308', '#22c55e'],
+                borderWidth: 2
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: true,
+              plugins: {
+                legend: {
+                  labels: { color: '#e5e7eb', font: { size: 12 } }
+                }
+              }
+            }
+          });
+        }
+
+        // Threat Type Chart
+        const threatTypeCtx = document.getElementById('threatTypeChart');
+        if (threatTypeCtx) {
+          threatTypeChart = new Chart(threatTypeCtx, {
+            type: 'bar',
+            data: {
+              labels: [],
+              datasets: [{
+                label: 'Count',
+                data: [],
+                backgroundColor: 'rgba(56, 189, 248, 0.6)',
+                borderColor: 'rgba(56, 189, 248, 1)',
+                borderWidth: 1
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: true,
+              indexAxis: 'y',
+              plugins: {
+                legend: {
+                  labels: { color: '#e5e7eb' }
+                }
+              },
+              scales: {
+                x: {
+                  ticks: { color: '#9ca3af' },
+                  grid: { color: 'rgba(56, 189, 248, 0.1)' }
+                },
+                y: {
+                  ticks: { color: '#9ca3af' }
+                }
+              }
+            }
+          });
+        }
+
+        // Attack Category Chart
+        const attackCategoryCtx = document.getElementById('attackCategoryChart');
+        if (attackCategoryCtx) {
+          attackCategoryChart = new Chart(attackCategoryCtx, {
+            type: 'pie',
+            data: {
+              labels: [],
+              datasets: [{
+                data: [],
+                backgroundColor: [
+                  'rgba(59, 130, 246, 0.8)',
+                  'rgba(139, 92, 246, 0.8)',
+                  'rgba(236, 72, 153, 0.8)',
+                  'rgba(249, 115, 22, 0.8)',
+                  'rgba(34, 197, 94, 0.8)',
+                  'rgba(56, 189, 248, 0.8)'
+                ]
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: true,
+              plugins: {
+                legend: {
+                  labels: { color: '#e5e7eb' }
+                }
+              }
+            }
+          });
+        }
+
+        // Timeline Chart
+        const timelineCtx = document.getElementById('timelineChart');
+        if (timelineCtx) {
+          timelineChart = new Chart(timelineCtx, {
+            type: 'line',
+            data: {
+              labels: [],
+              datasets: [
+                {
+                  label: 'Threats/sec',
+                  data: [],
+                  borderColor: 'rgba(239, 68, 68, 1)',
+                  backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                  borderWidth: 2,
+                  fill: true,
+                  tension: 0.4,
+                  pointRadius: 4,
+                  pointBackgroundColor: 'rgba(239, 68, 68, 1)',
+                  pointBorderColor: '#fff',
+                  pointBorderWidth: 2
+                },
+                {
+                  label: 'Safe/sec',
+                  data: [],
+                  borderColor: 'rgba(34, 197, 94, 1)',
+                  backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                  borderWidth: 2,
+                  fill: true,
+                  tension: 0.4,
+                  pointRadius: 4,
+                  pointBackgroundColor: 'rgba(34, 197, 94, 1)',
+                  pointBorderColor: '#fff',
+                  pointBorderWidth: 2
+                }
+              ]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              animation: false,
+              plugins: {
+                legend: {
+                  labels: { color: '#e5e7eb', font: { size: 12 } }
+                }
+              },
+              scales: {
+                y: {
+                  beginAtZero: true,
+                  ticks: { color: '#9ca3af' },
+                  grid: { color: 'rgba(56, 189, 248, 0.1)' }
+                },
+                x: {
+                  ticks: { color: '#9ca3af' },
+                  grid: { color: 'rgba(56, 189, 248, 0.1)' }
+                }
+              }
+            }
+          });
+        }
+      }
+
+      // Initialize Leaflet map for Live Threat Map
+      function initThreatMap() {
+        threatMapContainer = document.getElementById('threatMap');
+        if (!threatMapContainer || typeof L === 'undefined') {
+          return;
+        }
+
+        threatMap = L.map('threatMap', {
+          center: [20, 0],
+          zoom: 2,
+          worldCopyJump: true,
+          attributionControl: false,
+        });
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 5,
+          attribution: '&copy; OpenStreetMap contributors',
+        }).addTo(threatMap);
+
+        threatMapLayer = L.layerGroup().addTo(threatMap);
+      }
+
+      // ===== 3D Threat Globe =====
+      let globeScene, globeCamera, globeRenderer;
+      let globeGroup, globeGlobeMesh;
+      let globeObjects = [];
+      let globeRaycaster, globeMouse;
+      let globeClickablePoints = [];
+      let globeThreats = [];
+      const MAX_GLOBE_OBJECTS = 120;
+
+      function latLonToVector3(lat, lon, radius) {
+        const phi = (90 - lat) * (Math.PI / 180);
+        const theta = (lon + 180) * (Math.PI / 180);
+        const x = -radius * Math.sin(phi) * Math.cos(theta);
+        const y = radius * Math.cos(phi);
+        const z = radius * Math.sin(phi) * Math.sin(theta);
+        return new THREE.Vector3(x, y, z);
+      }
+
+      function initThreatGlobe() {
+        const container = document.getElementById('threatGlobeContainer');
+        if (!container || typeof THREE === 'undefined') {
+          return;
+        }
+
+        const rect = container.getBoundingClientRect();
+        const width = rect.width || 600;
+        const height = rect.height || 380;
+
+        globeScene = new THREE.Scene();
+        globeGroup = new THREE.Group();
+        globeScene.add(globeGroup);
+        globeObjects = [];
+        globeClickablePoints = [];
+        globeThreats = [];
+
+        globeRaycaster = new THREE.Raycaster();
+        globeMouse = new THREE.Vector2();
+
+        globeCamera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+        globeCamera.position.set(0, 0, 3.2);
+
+        globeRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        globeRenderer.setPixelRatio(window.devicePixelRatio || 1);
+        globeRenderer.setSize(width, height);
+        container.appendChild(globeRenderer.domElement);
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.35);
+        globeScene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+        dirLight.position.set(5, 3, 5);
+        globeScene.add(dirLight);
+
+        const globeGeometry = new THREE.SphereGeometry(1, 64, 64);
+        const baseMaterial = new THREE.MeshStandardMaterial({
+          // Light base so country texture appears bright and clear
+          color: 0xffffff,
+          emissive: 0x111827,
+          emissiveIntensity: 0.6,
+          metalness: 0.15,
+          roughness: 0.85,
+        });
+        globeGlobeMesh = new THREE.Mesh(globeGeometry, baseMaterial);
+        globeGroup.add(globeGlobeMesh);
+
+        // Subtle longitude/latitude grid so the globe has structure even if texture fails
+        const gridGeometry = new THREE.WireframeGeometry(globeGeometry);
+        const gridMaterial = new THREE.LineBasicMaterial({
+          color: 0x1f2937,
+          transparent: true,
+          opacity: 0.25,
+        });
+        const globeGrid = new THREE.LineSegments(gridGeometry, gridMaterial);
+        globeGroup.add(globeGrid);
+
+        // Try to load an Earth texture without clouds so countries are clear
+        try {
+          const loader = new THREE.TextureLoader();
+          loader.setCrossOrigin('anonymous');
+          loader.load(
+            'https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg',
+            (texture) => {
+              globeGlobeMesh.material.map = texture;
+              globeGlobeMesh.material.needsUpdate = true;
+            },
+            undefined,
+            (err) => {
+              console.warn('Globe texture load failed, using plain material', err);
+            }
+          );
+        } catch (e) {
+          console.warn('Globe texture load error, using plain material', e);
+        }
+
+        // Simple mouse controls: drag to rotate, wheel to zoom
+        let isDragging = false;
+        let prevX = 0;
+        let prevY = 0;
+        let targetRotationX = 0;
+        let targetRotationY = 0;
+
+        function onMouseDown(e) {
+          isDragging = true;
+          prevX = e.clientX;
+          prevY = e.clientY;
+        }
+
+        function onMouseMove(e) {
+          if (!isDragging || !globeGlobeMesh) return;
+          const dx = e.clientX - prevX;
+          const dy = e.clientY - prevY;
+          prevX = e.clientX;
+          prevY = e.clientY;
+          targetRotationY += dx * 0.005;
+          targetRotationX += dy * 0.005;
+          targetRotationX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, targetRotationX));
+        }
+
+        function onMouseUp() {
+          isDragging = false;
+        }
+
+        function onWheel(e) {
+          e.preventDefault();
+          // Use whichever scroll axis is stronger so both vertical and horizontal scrolling work
+          const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+          const zoomDelta = delta * 0.0012;
+          // Zoom in/out
+          globeCamera.position.z = Math.max(1.6, Math.min(4.5, globeCamera.position.z + zoomDelta));
+          // Strong rotation so scrolling clearly spins the globe
+          targetRotationY += delta * 0.06;
+        }
+
+        globeRenderer.domElement.addEventListener('mousedown', onMouseDown);
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+        globeRenderer.domElement.addEventListener('wheel', onWheel);
+
+        function onClick(e) {
+          if (!globeRaycaster || !globeCamera || !globeRenderer) return;
+          const rect = globeRenderer.domElement.getBoundingClientRect();
+          const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+          const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+          globeMouse.set(x, y);
+          globeRaycaster.setFromCamera(globeMouse, globeCamera);
+          let data = null;
+
+          // First, try to hit an actual marker or path
+          if (globeClickablePoints.length) {
+            const intersects = globeRaycaster.intersectObjects(globeClickablePoints, false);
+            if (intersects.length > 0) {
+              const obj = intersects[0].object;
+              data = obj.userData && obj.userData.threat;
+            }
+          }
+
+          // Fallback: click anywhere on globe, pick nearest threat by location
+          if (!data && globeGlobeMesh && globeThreats.length) {
+            const hit = globeRaycaster.intersectObject(globeGlobeMesh, false)[0];
+            if (hit) {
+              const clickVec = hit.point.clone().normalize();
+              let best = null;
+              let bestDist = Infinity;
+              const radius = 1;
+              for (const t of globeThreats) {
+                if (typeof t.latitude === 'number' && typeof t.longitude === 'number') {
+                  const vSrc = latLonToVector3(t.latitude, t.longitude, radius).normalize();
+                  const dSrc = vSrc.distanceTo(clickVec);
+                  if (dSrc < bestDist) {
+                    bestDist = dSrc;
+                    best = t;
+                  }
+                }
+                if (typeof t.dest_latitude === 'number' && typeof t.dest_longitude === 'number') {
+                  const vDst = latLonToVector3(t.dest_latitude, t.dest_longitude, radius).normalize();
+                  const dDst = vDst.distanceTo(clickVec);
+                  if (dDst < bestDist) {
+                    bestDist = dDst;
+                    best = t;
+                  }
+                }
+              }
+              if (best && bestDist < 0.5) {
+                data = best;
+              }
+            }
+          }
+
+          const globeInfo = document.getElementById('globeRouteInfo');
+          const globeThreatLabel = document.getElementById('globeThreatLabel');
+          const globeSourceLabel = document.getElementById('globeSourceLabel');
+          const globeDestLabel = document.getElementById('globeDestLabel');
+          const globeIpLabel = document.getElementById('globeIpLabel');
+          if (data) {
+            const fromLabel = `${data.country || 'Unknown'}${data.city ? ' - ' + data.city : ''}`;
+            const toLabel = `${data.dest_country || 'Unknown'}${data.dest_city ? ' - ' + data.dest_city : ''}`;
+            const typeLabel = data.threat_type || 'Threat';
+            const sevLabel = data.severity || 'Unknown';
+            const srcIp = data.source_ip || 'N/A';
+            const dstIp = data.dest_ip || 'N/A';
+
+            if (globeInfo) {
+              globeInfo.textContent = `Threat: ${typeLabel} (${sevLabel}) • Source: ${fromLabel} [IP: ${srcIp}] • Destination: ${toLabel} [IP: ${dstIp}]`;
+              globeInfo.style.display = 'block';
+            }
+            if (globeThreatLabel) {
+              globeThreatLabel.textContent = `Threat: ${typeLabel} (${sevLabel})`;
+            }
+            if (globeSourceLabel) {
+              globeSourceLabel.textContent = `Source: ${fromLabel}`;
+            }
+            if (globeDestLabel) {
+              globeDestLabel.textContent = `Destination: ${toLabel}`;
+            }
+            if (globeIpLabel) {
+              globeIpLabel.textContent = `IPs: ${srcIp} → ${dstIp}`;
+            }
+          }
+        }
+
+        globeRenderer.domElement.addEventListener('click', onClick);
+
+        const loadingOverlay = container.querySelector('.globe-loading');
+        if (loadingOverlay) {
+          loadingOverlay.style.display = 'none';
+        }
+
+        function onResize() {
+          if (!globeRenderer || !globeCamera) return;
+          const r = container.getBoundingClientRect();
+          const w = r.width || width;
+          const h = r.height || height;
+          globeCamera.aspect = w / h;
+          globeCamera.updateProjectionMatrix();
+          globeRenderer.setSize(w, h);
+        }
+
+        window.addEventListener('resize', onResize);
+
+        function animate() {
+          requestAnimationFrame(animate);
+          if (globeGroup) {
+            globeGroup.rotation.y += 0.0008;
+            globeGroup.rotation.y += (targetRotationY - globeGroup.rotation.y) * 0.1;
+            globeGroup.rotation.x += (targetRotationX - globeGroup.rotation.x) * 0.1;
+          }
+          if (globeRenderer && globeScene && globeCamera) {
+            globeRenderer.render(globeScene, globeCamera);
+          }
+        }
+
+        animate();
+      }
+
+      function addThreatToGlobe(threat) {
+        if (!globeScene || !globeGlobeMesh) return;
+        if (typeof threat.latitude !== 'number' || typeof threat.longitude !== 'number') return;
+
+        globeThreats.push(threat);
+        if (globeThreats.length > 200) {
+          globeThreats.shift();
+        }
+
+        const hasDest =
+          typeof threat.dest_latitude === 'number' && typeof threat.dest_longitude === 'number';
+
+        const severity = (threat.severity || 'Low').toLowerCase();
+        let color;
+        if (severity === 'critical') {
+          color = 0xef4444;
+        } else if (severity === 'high') {
+          color = 0xf97316;
+        } else if (severity === 'medium') {
+          color = 0xeab308;
+        } else {
+          color = 0x22c55e;
+        }
+
+        const radius = 1.03;
+        const srcVec = latLonToVector3(threat.latitude, threat.longitude, radius);
+        let destVec = null;
+        if (hasDest) {
+          destVec = latLonToVector3(threat.dest_latitude, threat.dest_longitude, radius);
+        }
+
+        const pointGeometry = new THREE.SphereGeometry(0.02, 10, 10);
+        const srcMaterial = new THREE.MeshBasicMaterial({ color });
+        const srcMesh = new THREE.Mesh(pointGeometry, srcMaterial);
+        srcMesh.position.copy(srcVec);
+        srcMesh.userData = { threat: threat };
+        if (globeGroup) {
+          globeGroup.add(srcMesh);
+        } else {
+          globeScene.add(srcMesh);
+        }
+        globeObjects.push(srcMesh);
+        globeClickablePoints.push(srcMesh);
+
+        if (hasDest && destVec) {
+          const destMaterial = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+          const destMesh = new THREE.Mesh(pointGeometry, destMaterial);
+          destMesh.scale.setScalar(0.8);
+          destMesh.position.copy(destVec);
+          destMesh.userData = { threat: threat };
+          if (globeGroup) {
+            globeGroup.add(destMesh);
+          } else {
+            globeScene.add(destMesh);
+          }
+          globeObjects.push(destMesh);
+
+          // Curved path between source and destination
+          const mid = srcVec.clone().add(destVec).multiplyScalar(0.5).normalize().multiplyScalar(1.25);
+          const curve = new THREE.QuadraticBezierCurve3(srcVec, mid, destVec);
+          const points = curve.getPoints(40);
+          const pathGeometry = new THREE.BufferGeometry().setFromPoints(points);
+          const pathMaterial = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.8 });
+          const pathLine = new THREE.Line(pathGeometry, pathMaterial);
+          pathLine.userData = { threat: threat };
+          if (globeGroup) {
+            globeGroup.add(pathLine);
+          } else {
+            globeScene.add(pathLine);
+          }
+          globeObjects.push(pathLine);
+          globeClickablePoints.push(pathLine);
+        }
+
+        // Limit number of globe objects
+        while (globeObjects.length > MAX_GLOBE_OBJECTS) {
+          const obj = globeObjects.shift();
+          if (obj) {
+            if (obj.parent) {
+              obj.parent.remove(obj);
+            }
+            const idx = globeClickablePoints.indexOf(obj);
+            if (idx !== -1) {
+              globeClickablePoints.splice(idx, 1);
+            }
+          }
+        }
+      }
+
+      // Socket.IO Event Handlers
+      socket.on('connect', () => {
+        console.log('Connected to monitoring server');
+      });
+
+      socket.on('monitoring_status', (data) => {
+        const statusSpan = document.getElementById('monitoringStatus');
+        if (!statusSpan) return;
+
+        const startBtn = document.getElementById('startMonitoring');
+        const stopBtn = document.getElementById('stopMonitoring');
+
+        if (data.status === 'active') {
+          statusSpan.textContent = 'Active';
+          statusSpan.className = 'status-active';
+          clientMonitoringActive = true;
+          if (startBtn) startBtn.disabled = true;
+          if (stopBtn) stopBtn.disabled = false;
+        } else {
+          statusSpan.textContent = 'Inactive';
+          statusSpan.className = 'status-inactive';
+          clientMonitoringActive = false;
+          if (startBtn) startBtn.disabled = false;
+          if (stopBtn) stopBtn.disabled = true;
+        }
+      });
+
+      socket.on('new_threat', (threat) => {
+        if (!clientMonitoringActive) {
+          return;
+        }
+        const threatFeed = document.getElementById('threatFeed');
+        const liveCard = document.getElementById('liveAttackCard');
+        const viewBtn = document.getElementById('liveAttackViewLocation');
+        
+        // Remove "no threats" message
+        const noThreats = threatFeed.querySelector('.no-threats');
+        if (noThreats) {
+          noThreats.remove();
+        }
+
+        // Create threat row
+        const threatRow = document.createElement('div');
+        threatRow.className = `threat-item severity-${threat.severity.toLowerCase()}`;
+        threatRow.innerHTML = `
+          <span class="col-time">${threat.timestamp}</span>
+          <span class="col-source">${threat.source_ip}</span>
+          <span class="col-dest">${threat.dest_ip}</span>
+          <span class="col-port">${threat.port}</span>
+          <span class="col-type">${threat.threat_type}</span>
+          <span class="col-severity">${threat.severity}</span>
+          <span class="col-confidence">${(threat.confidence * 100).toFixed(0)}%</span>
+        `;
+
+        threatFeed.insertBefore(threatRow, threatFeed.firstChild);
+
+        // Keep only last 50 threats
+        while (threatFeed.children.length > 50) {
+          threatFeed.removeChild(threatFeed.lastChild);
+        }
+
+        // Update 3D globe route info (threat type + source + destination)
+        const globeInfo = document.getElementById('globeRouteInfo');
+        if (false && globeInfo) {
+          const fromLabel = `${threat.country || 'Unknown'}${threat.city ? ' - ' + threat.city : ''}`;
+          const toLabel = `${threat.dest_country || 'Unknown'}${threat.dest_city ? ' - ' + threat.dest_city : ''}`;
+          const typeLabel = threat.threat_type || 'Threat';
+          const sevLabel = threat.severity || 'Unknown';
+          globeInfo.textContent = `Threat: ${typeLabel} (${sevLabel}) • Source: ${fromLabel} • Destination: ${toLabel}`;
+        }
+
+        // Update map source/destination sets
+        const srcKey = `${threat.country || ''}-${threat.city || ''}`;
+        const destKey = `${threat.dest_country || ''}-${threat.dest_city || ''}`;
+        if (srcKey.trim()) {
+          mapSourceSet.add(srcKey);
+        }
+        if (destKey.trim()) {
+          mapDestSet.add(destKey);
+        }
+
+        // Update paths table (from -> to with type & severity)
+        const pathsBody = document.getElementById('mapPathsBody');
+        if (pathsBody) {
+          const emptyRow = pathsBody.querySelector('.map-paths-empty');
+          if (emptyRow) {
+            emptyRow.remove();
+          }
+          const row = document.createElement('div');
+          row.className = 'map-path-row';
+          const fromLabel = `${threat.country || 'Unknown'}${threat.city ? ' - ' + threat.city : ''}`;
+          const toLabel = `${threat.dest_country || 'Unknown'}${threat.dest_city ? ' - ' + threat.dest_city : ''}`;
+          row.innerHTML = `
+            <span>${threat.timestamp}</span>
+            <span>${fromLabel}</span>
+            <span>${toLabel}</span>
+            <span>${threat.threat_type || 'Threat'}</span>
+            <span>${threat.severity || 'Unknown'}</span>
+          `;
+          pathsBody.insertBefore(row, pathsBody.firstChild);
+
+          // Limit to last 40 paths
+          while (pathsBody.children.length > 40) {
+            pathsBody.removeChild(pathsBody.lastChild);
+          }
+        }
+
+        // Update Live Attack card with this threat
+        if (liveCard) {
+          const countryEl = document.getElementById('liveAttackCountry');
+          const coordsEl = document.getElementById('liveAttackCoords');
+          const typeEl = document.getElementById('liveAttackType');
+          const ipEl = document.getElementById('liveAttackIp');
+          const sevEl = document.getElementById('liveAttackSeverity');
+          const timeEl = document.getElementById('liveAttackTime');
+          const networkEl = document.getElementById('liveAttackNetwork');
+
+          const lat = typeof threat.latitude === 'number' ? threat.latitude : null;
+          const lon = typeof threat.longitude === 'number' ? threat.longitude : null;
+
+          if (countryEl) countryEl.textContent = threat.country || 'Unknown';
+          if (coordsEl) {
+            if (lat !== null && lon !== null) {
+              coordsEl.textContent = `${lat.toFixed(4)}°N, ${lon.toFixed(4)}°E`;
+            } else {
+              coordsEl.textContent = '—';
+            }
+          }
+          if (typeEl) typeEl.textContent = threat.threat_type || 'Threat';
+          if (ipEl) ipEl.textContent = threat.source_ip || '—';
+          if (sevEl) {
+            sevEl.textContent = threat.severity || 'Unknown';
+            sevEl.classList.remove('live-attack-severity-critical', 'live-attack-severity-high', 'live-attack-severity-medium', 'live-attack-severity-low');
+            const sevLower = (threat.severity || '').toLowerCase();
+            if (sevLower === 'critical') sevEl.classList.add('live-attack-severity-critical');
+            else if (sevLower === 'high') sevEl.classList.add('live-attack-severity-high');
+            else if (sevLower === 'medium') sevEl.classList.add('live-attack-severity-medium');
+            else if (sevLower === 'low') sevEl.classList.add('live-attack-severity-low');
+          }
+          if (timeEl) timeEl.textContent = threat.timestamp || '—';
+          if (networkEl) networkEl.textContent = 'GLOBAL';
+
+          // Store last coordinates on the button for Google Maps
+          if (viewBtn) {
+            if (lat !== null && lon !== null) {
+              viewBtn.dataset.lat = String(lat);
+              viewBtn.dataset.lon = String(lon);
+              viewBtn.disabled = false;
+            } else {
+              delete viewBtn.dataset.lat;
+              delete viewBtn.dataset.lon;
+              viewBtn.disabled = true;
+            }
+          }
+
+          liveCard.style.display = 'flex';
+        }
+
+        // Plot on Live Threat Map if we have coordinates
+        if (threatMap && threatMapLayer && typeof threat.latitude === 'number' && typeof threat.longitude === 'number') {
+          // Remove empty-state message on first threat
+          const emptyState = document.querySelector('#threatMap .map-empty-state');
+          if (emptyState) {
+            emptyState.remove();
+          }
+
+          const severity = (threat.severity || 'Low').toLowerCase();
+          let color;
+          if (severity === 'critical') {
+            color = '#ef4444';
+          } else if (severity === 'high') {
+            color = '#f97316';
+          } else if (severity === 'medium') {
+            color = '#eab308';
+          } else {
+            color = '#22c55e';
+          }
+
+          // Source (attacker) marker
+          const srcMarker = L.circleMarker([threat.latitude, threat.longitude], {
+            radius: 6,
+            color: color,
+            fillColor: color,
+            fillOpacity: 0.8,
+            weight: 2,
+          }).addTo(threatMapLayer);
+
+          srcMarker.bindTooltip(`${threat.country || 'Unknown'} - ${threat.threat_type || 'Threat'} (${threat.severity || 'Unknown'})`);
+
+          // Destination marker and path if available
+          let destMarker = null;
+          let pathLine = null;
+          if (typeof threat.dest_latitude === 'number' && typeof threat.dest_longitude === 'number') {
+            destMarker = L.circleMarker([threat.dest_latitude, threat.dest_longitude], {
+              radius: 4,
+              color: '#38bdf8',
+              fillColor: '#38bdf8',
+              fillOpacity: 0.8,
+              weight: 1.5,
+            }).addTo(threatMapLayer);
+
+            destMarker.bindTooltip(`${threat.dest_country || 'Target'} (${threat.dest_city || ''})`);
+
+            pathLine = L.polyline(
+              [
+                [threat.latitude, threat.longitude],
+                [threat.dest_latitude, threat.dest_longitude],
+              ],
+              {
+                color,
+                weight: 1.5,
+                opacity: 0.7,
+                dashArray: '4,4',
+              }
+            ).addTo(threatMapLayer);
+          }
+
+          // Track layers so we can remove old ones
+          threatMarkers.push(srcMarker);
+          if (destMarker) threatMarkers.push(destMarker);
+          if (pathLine) threatMarkers.push(pathLine);
+
+          while (threatMarkers.length > MAX_MAP_POINTS) {
+            const old = threatMarkers.shift();
+            if (old) {
+              threatMapLayer.removeLayer(old);
+            }
+          }
+        }
+
+        // Also project this threat onto the 3D globe
+        if (typeof addThreatToGlobe === 'function') {
+          addThreatToGlobe(threat);
+        }
+      });
+
+      socket.on('stats_update', (stats) => {
+        // Update metric cards
+        document.getElementById('packetsCount').textContent = stats.packets.toLocaleString();
+        document.getElementById('safePackets').textContent = stats.safe_packets.toLocaleString();
+        document.getElementById('threatPackets').textContent = stats.threat_packets.toLocaleString();
+        document.getElementById('criticalCount').textContent = stats.critical;
+        document.getElementById('highCount').textContent = stats.high;
+        document.getElementById('mediumCount').textContent = stats.medium;
+        document.getElementById('lowCount').textContent = stats.low;
+
+        // Update Live Threat Map summary metrics
+        const mapCriticalEl = document.getElementById('mapCriticalCount');
+        const mapHighEl = document.getElementById('mapHighCount');
+        const mapMediumEl = document.getElementById('mapMediumCount');
+        const mapLowEl = document.getElementById('mapLowCount');
+        const mapSourceEl = document.getElementById('mapSourceLocations');
+        const mapDestEl = document.getElementById('mapDestLocations');
+
+        if (mapCriticalEl) mapCriticalEl.textContent = stats.critical;
+        if (mapHighEl) mapHighEl.textContent = stats.high;
+        if (mapMediumEl) mapMediumEl.textContent = stats.medium;
+        if (mapLowEl) mapLowEl.textContent = stats.low;
+        if (mapSourceEl) mapSourceEl.textContent = mapSourceSet.size;
+        if (mapDestEl) mapDestEl.textContent = mapDestSet.size;
+
+        // Update timeline data
+        const currentTime = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        timelineData.labels.push(currentTime);
+        timelineData.threats.push(stats.threat_packets);
+        timelineData.safe.push(stats.safe_packets);
+
+        // Keep only last 30 points (60 seconds)
+        if (timelineData.labels.length > MAX_TIMELINE_POINTS) {
+          timelineData.labels.shift();
+          timelineData.threats.shift();
+          timelineData.safe.shift();
+        }
+
+        // Update timeline chart
+        if (timelineChart) {
+          timelineChart.data.labels = timelineData.labels;
+          timelineChart.data.datasets[0].data = timelineData.threats;
+          timelineChart.data.datasets[1].data = timelineData.safe;
+          timelineChart.update('none');
+        }
+
+        // Update severity chart
+        if (severityChart) {
+          severityChart.data.datasets[0].data = [stats.critical, stats.high, stats.medium, stats.low];
+          severityChart.update('none');
+        }
+
+        // Update threat type chart
+        if (threatTypeChart && stats.threat_types) {
+          const types = Object.entries(stats.threat_types)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 8);
+          threatTypeChart.data.labels = types.map(t => t[0]);
+          threatTypeChart.data.datasets[0].data = types.map(t => t[1]);
+          threatTypeChart.update('none');
+        }
+
+        // Update attack category chart
+        if (attackCategoryChart && stats.attack_distribution) {
+          const categories = Object.entries(stats.attack_distribution);
+          attackCategoryChart.data.labels = categories.map(c => c[0]);
+          attackCategoryChart.data.datasets[0].data = categories.map(c => c[1]);
+          attackCategoryChart.update('none');
+        }
+      });
+
+      // ===== Security Assistant Chatbot (text + voice) =====
+      let chatRecognition = null;
+      let chatRecognizing = false;
+      let chatVoiceEnabled = true; // when false, assistant stays silent (no speech synthesis)
+      let chatWindowOpen = false; // when false, do not speak replies even if enabled
+
+      function appendChatMessage(sender, text) {
+        const container = document.getElementById('chatMessages');
+        if (!container || !text) return;
+        const row = document.createElement('div');
+        row.className = 'chat-message ' + (sender === 'user' ? 'chat-message-user' : 'chat-message-bot');
+        row.textContent = text;
+        container.appendChild(row);
+        container.scrollTop = container.scrollHeight;
+      }
+
+      function speakReply(text) {
+        if (!chatVoiceEnabled || !chatWindowOpen) return;
+        if (!('speechSynthesis' in window) || !text) return;
+        try {
+          const utter = new SpeechSynthesisUtterance(text);
+          utter.lang = 'en-US';
+          utter.rate = 1.0;
+          window.speechSynthesis.cancel();
+          window.speechSynthesis.speak(utter);
+        } catch (e) {
+          console.warn('Speech synthesis error', e);
+        }
+      }
+
+      async function sendChatMessage() {
+        const input = document.getElementById('chatInput');
+        const micStatus = document.getElementById('chatMicStatus');
+        if (!input) return;
+        const text = (input.value || '').trim();
+        if (!text) return;
+        if (micStatus) {
+          micStatus.textContent = '';
+        }
+        appendChatMessage('user', text);
+        input.value = '';
+
+        // If the user says "stop", disable voice responses but keep text replies
+        const lower = text.toLowerCase();
+        if (
+          lower === 'stop' ||
+          lower === 'stop.' ||
+          lower === 'stop talking' ||
+          lower === 'stop speaking' ||
+          lower === 'mute'
+        ) {
+          chatVoiceEnabled = false;
+          if ('speechSynthesis' in window) {
+            try {
+              window.speechSynthesis.cancel();
+            } catch (e) {
+              console.warn('speechSynthesis cancel error', e);
+            }
+          }
+          appendChatMessage('bot', "Okay, I'll stop speaking aloud and only reply in text.");
+          return;
+        }
+
+        // If the user says "speak", re-enable voice responses
+        if (
+          lower === 'speak' ||
+          lower === 'start speaking' ||
+          lower === 'start talking'
+        ) {
+          chatVoiceEnabled = true;
+          appendChatMessage('bot', 'Voice responses are enabled again.');
+          speakReply('Okay, I will start speaking again.');
+          return;
+        }
+
+        try {
+          const res = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: text })
+          });
+          const data = await res.json();
+          const reply = data && data.reply ? data.reply : 'Sorry, I could not generate a reply.';
+          appendChatMessage('bot', reply);
+          speakReply(reply);
+        } catch (err) {
+          console.error('Chat API error', err);
+          appendChatMessage('bot', 'Error contacting chatbot backend.');
+        }
+      }
+
+      function initChatbot() {
+        const input = document.getElementById('chatInput');
+        const sendBtn = document.getElementById('chatSendButton');
+        const micBtn = document.getElementById('chatMicButton');
+        const micStatus = document.getElementById('chatMicStatus');
+
+        if (!input || !sendBtn) {
+          return;
+        }
+
+        sendBtn.addEventListener('click', () => {
+          sendChatMessage();
+        });
+
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendChatMessage();
+          }
+        });
+
+        // Browser speech recognition (Web Speech API) for voice input
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (SpeechRecognition && micBtn && micStatus) {
+          let lastTranscript = '';
+
+          chatRecognition = new SpeechRecognition();
+          chatRecognition.lang = 'en-US';
+          chatRecognition.continuous = true;
+          chatRecognition.interimResults = false;
+
+          chatRecognition.onstart = () => {
+            chatRecognizing = true;
+            lastTranscript = '';
+            micBtn.classList.add('chat-mic-on');
+            micStatus.textContent = 'Listening...';
+          };
+          chatRecognition.onend = () => {
+            chatRecognizing = false;
+            micBtn.classList.remove('chat-mic-on');
+            if (!lastTranscript) {
+              micStatus.textContent = '';
+            }
+          };
+          chatRecognition.onerror = (event) => {
+            console.warn('Speech recognition error', event.error);
+            chatRecognizing = false;
+            micBtn.classList.remove('chat-mic-on');
+            let msg = 'Voice recognition error.';
+            if (event && event.error === 'not-allowed') {
+              msg = 'Microphone permission blocked. Please allow mic access in your browser and try again.';
+            } else if (event && event.error === 'no-speech') {
+              msg = 'No speech detected. Please speak clearly into your microphone.';
+            }
+            micStatus.textContent = msg;
+          };
+          chatRecognition.onresult = (event) => {
+            if (!event.results) return;
+            // Accumulate only final results while listening continuously
+            let finalChunk = '';
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+              const res = event.results[i];
+              if (res.isFinal && res[0] && res[0].transcript) {
+                finalChunk += res[0].transcript + ' ';
+              }
+            }
+            finalChunk = finalChunk.trim();
+            if (!finalChunk) return;
+
+            lastTranscript = (lastTranscript + ' ' + finalChunk).trim();
+            input.value = lastTranscript;
+            micStatus.textContent = 'Recorded, ready to send.';
+          };
+
+          micBtn.addEventListener('click', () => {
+            try {
+              if (chatRecognizing) {
+                chatRecognition.stop();
+              } else {
+                micStatus.textContent = 'Listening...';
+                chatRecognition.start();
+              }
+            } catch (e) {
+              console.warn('Unable to start speech recognition', e);
+              micStatus.textContent = 'Unable to start voice input. Check browser microphone permissions.';
+            }
+          });
+        } else if (micBtn && micStatus) {
+          micBtn.disabled = true;
+          micStatus.textContent = 'Voice input is not supported in this browser. Please use Chrome or Edge on desktop.';
+        }
+
+        // Only greet once per browser tab (persists across reloads)
+        try {
+          const greetedKey = 'dashboardChatbotGreeted';
+          const alreadyGreeted = window.sessionStorage && sessionStorage.getItem(greetedKey) === '1';
+          if (!alreadyGreeted) {
+            const greeting = 'Hi, I am your security assistant. Ask me about AIP Data Analysis, Automated Threat Hunting, live threat monitoring, the 3D globe, database storage, or WiFi/VPN status.';
+            appendChatMessage('bot', greeting);
+            // Try to speak the initial greeting if the browser supports speech synthesis
+            speakReply(greeting);
+            if (window.sessionStorage) {
+              sessionStorage.setItem(greetedKey, '1');
+            }
+          }
+        } catch (e) {
+          const fallbackGreeting = 'Hi, I am your security assistant. Ask me about AIP Data Analysis, Automated Threat Hunting, live threat monitoring, the 3D globe, database storage, or WiFi/VPN status.';
+          appendChatMessage('bot', fallbackGreeting);
+          speakReply(fallbackGreeting);
+        }
+      }
+
+      function initChatWidget() {
+        const launcher = document.getElementById('chatLauncher');
+        const windowEl = document.getElementById('chatWindow');
+        const closeBtn = document.getElementById('chatWindowClose');
+        const expandBtn = document.getElementById('chatWindowExpand');
+
+        if (!launcher || !windowEl) {
+          return;
+        }
+
+        let isFullscreen = false;
+
+        function setFullscreen(on) {
+          isFullscreen = on;
+          if (on) {
+            windowEl.classList.add('chat-window-fullscreen');
+          } else {
+            windowEl.classList.remove('chat-window-fullscreen');
+          }
+        }
+
+        function openChat() {
+          windowEl.classList.add('open');
+          chatWindowOpen = true;
+        }
+
+        function closeChat() {
+          windowEl.classList.remove('open');
+          setFullscreen(false);
+          chatWindowOpen = false;
+          if ('speechSynthesis' in window) {
+            try {
+              window.speechSynthesis.cancel();
+            } catch (e) {
+              console.warn('speechSynthesis cancel error on close', e);
+            }
+          }
+        }
+
+        launcher.addEventListener('click', () => {
+          if (windowEl.classList.contains('open')) {
+            closeChat();
+          } else {
+            openChat();
+          }
+        });
+
+        if (expandBtn) {
+          expandBtn.addEventListener('click', () => {
+            if (!windowEl.classList.contains('open')) {
+              openChat();
+            }
+            setFullscreen(!isFullscreen);
+          });
+        }
+
+        if (closeBtn) {
+          closeBtn.addEventListener('click', () => {
+            closeChat();
+          });
+        }
+      }
+
+      // Button Event Listeners
+      const startMonitoringBtn = document.getElementById('startMonitoring');
+      const stopMonitoringBtn = document.getElementById('stopMonitoring');
+      if (startMonitoringBtn && stopMonitoringBtn) {
+        startMonitoringBtn.addEventListener('click', () => {
+          clientMonitoringActive = true;
+          socket.emit('start_monitoring');
+          startMonitoringBtn.disabled = true;
+          stopMonitoringBtn.disabled = false;
+        });
+
+        stopMonitoringBtn.addEventListener('click', () => {
+          clientMonitoringActive = false;
+          socket.emit('stop_monitoring');
+          startMonitoringBtn.disabled = false;
+          stopMonitoringBtn.disabled = true;
+        });
+      }
+
+      // Live Attack card: View Exact Location -> Google Maps
+      const liveAttackBtn = document.getElementById('liveAttackViewLocation');
+      if (liveAttackBtn) {
+        liveAttackBtn.addEventListener('click', () => {
+          const lat = liveAttackBtn.dataset.lat;
+          const lon = liveAttackBtn.dataset.lon;
+          if (!lat || !lon) return;
+          const url = `https://www.google.com/maps?q=${encodeURIComponent(lat)},${encodeURIComponent(lon)}`;
+          window.location.href = url;
+        });
+      }
+
+      // Initialize on page load
+      document.addEventListener('DOMContentLoaded', () => {
+        openDbConfigModal = setupDbConfigModal();
+        initDatabaseControls();
+        initLiveCharts();
+        initAipPanel();
+        initThreatHuntingPanel();
+        initChatWidget();
+        updateWiFiStatus();
+        updateModelAccuracy();
+        initThreatMap();
+        initThreatGlobe();
+        initChatbot();
+        // Update WiFi status every 10 seconds
+        setInterval(updateWiFiStatus, 10000);
+        // Update model accuracy periodically so it reflects current activity
+        setInterval(updateModelAccuracy, 12000);
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,22 @@
+pandas
+numpy
+scikit-learn
+xgboost
+joblib
+openpyxl
+pyarrow
+flask-socketio==5.3.5
+python-engineio==4.6.1
+python-socketio==5.8.0
+reportlab
+boto3
+websocket-client
+mysql-connector-python
+
+# Optional database drivers for configurable external threat storage
+psycopg2-binary
+pymongo
+redis
+pymysql
+cassandra-driver
+pyodbc

@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#020617"/>
+      <stop offset="1" stop-color="#020617"/>
+    </linearGradient>
+    <linearGradient id="oceanGrad" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#0b1120"/>
+      <stop offset="1" stop-color="#020617"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect x="0" y="0" width="800" height="400" fill="url(#bgGrad)"/>
+
+  <!-- Ocean ellipse -->
+  <ellipse cx="400" cy="200" rx="380" ry="180" fill="url(#oceanGrad)" stroke="#1e293b" stroke-width="2" opacity="0.9"/>
+
+  <!-- Simplified continents (stylized, not geographic) -->
+  <g fill="#1e3a8a" opacity="0.65">
+    <!-- North America -->
+    <path d="M160 120 L210 80 L260 90 L280 130 L260 170 L210 180 L170 160 Z"/>
+    <!-- South America -->
+    <path d="M240 190 L270 200 L285 240 L275 290 L250 310 L235 270 Z"/>
+    <!-- Europe / North Africa -->
+    <path d="M380 110 L430 90 L480 100 L510 130 L490 160 L450 165 L410 150 Z"/>
+    <path d="M410 165 L455 175 L470 210 L455 240 L420 245 L395 220 Z"/>
+    <!-- Middle East / India -->
+    <path d="M480 170 L525 175 L555 190 L560 215 L530 235 L495 225 Z"/>
+    <!-- Africa -->
+    <path d="M430 210 L470 225 L490 260 L480 305 L450 320 L420 290 L415 250 Z"/>
+    <!-- Asia -->
+    <path d="M520 110 L600 100 L660 120 L690 160 L675 190 L640 205 L600 190 L560 170 Z"/>
+    <!-- Australia -->
+    <path d="M600 255 L650 265 L675 290 L660 315 L625 320 L595 300 Z"/>
+  </g>
+
+  <!-- Subtle latitude/longitude lines -->
+  <g stroke="#0f172a" stroke-width="0.5" opacity="0.45">
+    <ellipse cx="400" cy="200" rx="320" ry="150" fill="none"/>
+    <ellipse cx="400" cy="200" rx="250" ry="115" fill="none"/>
+    <ellipse cx="400" cy="200" rx="180" ry="80" fill="none"/>
+    <line x1="80" y1="200" x2="720" y2="200"/>
+    <line x1="400" y1="40" x2="400" y2="360"/>
+    <line x1="240" y1="70" x2="560" y2="330"/>
+    <line x1="560" y1="70" x2="240" y2="330"/>
+  </g>
+</svg>
