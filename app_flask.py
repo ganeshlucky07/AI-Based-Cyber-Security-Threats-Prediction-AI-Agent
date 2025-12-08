@@ -29,7 +29,7 @@ app.secret_key = "dev-secret-key"
 socketio = SocketIO(
     app,
     cors_allowed_origins="*",
-    async_mode="eventlet",
+    async_mode="threading",
     ping_timeout=60,
     ping_interval=25,
 )
@@ -2957,12 +2957,13 @@ def api_aip_analyze():
 
                 datasets_suffix = (
                     " Reference datasets for similar security analytics often include: "
-                    "4pnwdgt7b7 (Synthetic Network Traffic Dataset for Anomaly Detection in SDN Environments), "
-                    "Gotham Dataset 2025 (IoT network traffic, benign and malicious), "
-                    "MH-1M Android Malware Dataset, APIMDS (API call-sequence dataset for malware analysis), "
-                    "EMBER (PE file feature dataset for malware classification), CTU-13 (botnet/normal/background traffic), "
-                    "Canadian Institute for Cybersecurity intrusion detection datasets, Unified Host and Network Dataset (LANL), "
-                    "NSL-KDD, and KDD Cup 1999."
+                    "CICIDS 2017, CIC-DDoS 2019, UNSW-NB15, TON_IoT, Bot-IoT, "
+                    "DARPA Intrusion Detection Evaluation Dataset, CSE-CIC-IDS 2018, NSL-KDD, "
+                    "ADFA-LD (Linux Anomaly Detection Dataset), ADFA-WD (Windows Anomaly Detection Dataset), "
+                    "CTU-13 Botnet Dataset, CAIDA DDoS Attack Dataset, MAWI Working Group Traffic Archives, "
+                    "ISCX VPN-nonVPN Dataset, Kaggle synthetic API cybersecurity datasets, "
+                    "ODU Intrusion Detection Logs Dataset, Imperva Web Attack Dataset, AWID Wireless Intrusion Dataset, "
+                    "Open Threat Research (OTRF) datasets, and the LANL Cyber Security Dataset."
                 )
                 status_text = status_text + datasets_suffix
 
