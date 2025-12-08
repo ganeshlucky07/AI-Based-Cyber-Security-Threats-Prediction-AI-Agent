@@ -1508,7 +1508,9 @@
       }
 
       // ===== Live Threat Monitoring =====
-      const socket = io();
+      const socket = io({
+        transports: ['polling'],
+      });
       let clientMonitoringActive = false;
       let severityChart, threatTypeChart, attackCategoryChart, timelineChart;
       let threatTypeData = {};

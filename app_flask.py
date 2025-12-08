@@ -26,20 +26,10 @@ from src.wifi_scanner import WiFiScanner
 
 app = Flask(__name__)
 app.secret_key = "dev-secret-key"
-
-ASYNC_MODE = os.environ.get("SOCKETIO_ASYNC_MODE")
-if not ASYNC_MODE:
-    try:
-        import eventlet  # type: ignore  # noqa: F401
-
-        ASYNC_MODE = "eventlet"
-    except Exception:
-        ASYNC_MODE = "threading"
-
 socketio = SocketIO(
     app,
     cors_allowed_origins="*",
-    async_mode=ASYNC_MODE,
+    async_mode="threading",
     ping_timeout=60,
     ping_interval=25,
 )
