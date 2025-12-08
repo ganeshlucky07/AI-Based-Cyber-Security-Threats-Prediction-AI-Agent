@@ -26,7 +26,15 @@ from src.wifi_scanner import WiFiScanner
 
 app = Flask(__name__)
 app.secret_key = "dev-secret-key"
-socketio = SocketIO(app, cors_allowed_origins="*")
+socketio = SocketIO(
+    app,
+    cors_allowed_origins="*",
+    async_mode="threading",
+    ping_timeout=60,
+    ping_interval=25,
+    engineio_logger=False,
+    socketio_logger=False
+)
 
 STATIC_REPORT_PATH = BASE_DIR / "reports" / "web_static_latest.csv"
 STATIC_PDF_PATH = BASE_DIR / "reports" / "web_static_latest.pdf"

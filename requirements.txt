@@ -21,3 +21,4 @@ pymysql
 cassandra-driver
 pyodbc
 gunicorn
+eventlet
