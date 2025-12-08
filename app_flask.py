@@ -3631,5 +3631,17 @@ def download_sqlite_threats():
         return redirect(url_for("index"))
 
 
+# Add cache headers for static assets to improve performance
+@app.after_request
+def add_cache_headers(response):
+    """Add cache headers for static assets to reduce server load."""
+    if response.content_type and 'text/html' not in response.content_type:
+        # Cache static assets (CSS, JS, images) for 1 hour
+        if any(ext in response.content_type for ext in ['javascript', 'css', 'image', 'font']):
+            response.cache_control.max_age = 3600
+            response.cache_control.public = True
+    return response
+
+
 if __name__ == "__main__":
     socketio.run(app, debug=True, host='0.0.0.0', port=5000)
