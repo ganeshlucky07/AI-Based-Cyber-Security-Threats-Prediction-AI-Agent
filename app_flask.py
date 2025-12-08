@@ -2853,15 +2853,29 @@ def api_aip_analyze():
     _api_key = (payload.get("api_key") or "").strip()
     _model = (payload.get("model") or "").strip()
 
-    # Basic API key validation so the UI can surface an obvious error instead of
-    # pretending to run an analysis with an invalid key. In this demo, we simply
-    # require a non-empty key.
+    # Demo API key validation so the UI can surface an obvious error instead of
+    # pretending to run an analysis with an invalid key. This does not verify
+    # against a real provider, but enforces a simple format so random words are
+    # treated as invalid.
     if not _api_key:
         return (
             jsonify(
                 {
                     "ok": False,
-                    "message": "enter api key to analyse okay",
+                    "message": "Enter an API key to run analysis.",
+                }
+            ),
+            400,
+        )
+
+    # Require a minimum length and at least one digit so obviously fake keys
+    # (e.g. very short words) are rejected in this demo.
+    if len(_api_key) < 16 or not any(ch.isdigit() for ch in _api_key):
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    "message": "Invalid API key format. Use a key with at least 16 characters and numbers (demo validation).",
                 }
             ),
             400,
@@ -2870,6 +2884,100 @@ def api_aip_analyze():
     init_threat_db()
 
     try:
+        # If there are live threats in memory, always analyze those first so the
+        # AIP panel reflects the current real-time monitoring state.
+        live_threats = list(threat_history)
+        if live_threats:
+            total_records = len(live_threats)
+            severity_weights = {
+                "Critical": 1.0,
+                "High": 0.75,
+                "Medium": 0.5,
+                "Low": 0.25,
+            }
+
+            threats_detected = 0
+            total_score = 0.0
+            type_counts = defaultdict(int)
+            counts_by_hour: dict[int, int] = {}
+            category_map = defaultdict(int)
+
+            for t in live_threats:
+                sev = (t.get("severity") or "").title()
+                if sev in ("High", "Critical"):
+                    threats_detected += 1
+                total_score += float(severity_weights.get(sev, 0.25))
+
+                ttype = t.get("threat_type") or "Unknown"
+                type_counts[ttype] += 1
+
+                ts_str = str(t.get("timestamp") or "")
+                if len(ts_str) >= 2 and ts_str[:2].isdigit():
+                    try:
+                        h_int = int(ts_str[:2])
+                    except ValueError:
+                        h_int = None
+                    if h_int is not None and 0 <= h_int < 24:
+                        counts_by_hour[h_int] = counts_by_hour.get(h_int, 0) + 1
+
+                cat = t.get("attack_category") or "Network"
+                category_map[cat] += 1
+
+            risk_score = round(total_score / float(total_records), 2) if total_records else 0.0
+
+            if threats_detected > 0 and type_counts:
+                top_type = max(type_counts.items(), key=lambda kv: kv[1])[0]
+                status_text = f"Threats detected – most common threat type: {top_type}."
+            else:
+                status_text = "Safe – no High or Critical threats detected."
+
+            timeline_labels = [f"{h:02d}" for h in range(24)]
+            timeline_counts = [counts_by_hour.get(h, 0) for h in range(24)]
+
+            category_labels: list[str] = []
+            category_counts: list[int] = []
+            for label, cnt in sorted(
+                category_map.items(), key=lambda kv: kv[1], reverse=True
+            )[:8]:
+                category_labels.append(label)
+                category_counts.append(int(cnt))
+
+            # Simple 12-month forecast based on current daily volume
+            daily_total = sum(timeline_counts)
+            if daily_total == 0:
+                daily_total = threats_detected or total_records
+
+            monthly_base = max(int(daily_total * 30), 0)
+            forecast_labels = [f"M{i+1}" for i in range(12)]
+            if monthly_base == 0:
+                forecast_counts = [0 for _ in range(12)]
+            else:
+                forecast_counts = [
+                    int(round(monthly_base * (1.0 + 0.05 * i))) for i in range(12)
+                ]
+
+            return jsonify(
+                {
+                    "ok": True,
+                    "status_text": status_text,
+                    "total_records": total_records,
+                    "threats_detected": threats_detected,
+                    "risk_score": risk_score,
+                    "timeline": {
+                        "labels": timeline_labels,
+                        "counts": timeline_counts,
+                    },
+                    "forecast": {
+                        "labels": forecast_labels,
+                        "counts": forecast_counts,
+                    },
+                    "categories": {
+                        "labels": category_labels,
+                        "counts": category_counts,
+                    },
+                }
+            )
+
         with sqlite3.connect(THREAT_DB_PATH) as conn:
             conn.row_factory = sqlite3.Row
             cur = conn.cursor()
@@ -2879,125 +2987,29 @@ def api_aip_analyze():
             row = cur.fetchone()
             total_records = int(row["c"] or 0)
 
-            # If the database is still empty (common on fresh deploys or when the
-            # user hasn't explicitly saved to a database yet), fall back to the
-            # in-memory live threat_history so the AIP panel can still show a
-            # meaningful analysis based on recent activity.
+            # If there are no records anywhere (no DB rows and no live threats),
+            # return a safe baseline so the charts still render.
             if total_records == 0:
-                live_threats = list(threat_history)
-                if not live_threats:
-                    # No data anywhere – return a safe baseline payload so charts render.
-                    timeline_labels = [f"{h:02d}" for h in range(24)]
-                    forecast_labels = [f"M{i+1}" for i in range(12)]
-                    return jsonify(
-                        {
-                            "ok": True,
-                            "status_text": "Safe – no threat records available for analysis.",
-                            "total_records": 0,
-                            "threats_detected": 0,
-                            "risk_score": 0.0,
-                            "timeline": {
-                                "labels": timeline_labels,
-                                "counts": [0 for _ in range(24)],
-                            },
-                            "forecast": {
-                                "labels": forecast_labels,
-                                "counts": [0 for _ in range(12)],
-                            },
-                            "categories": {
-                                "labels": [],
-                                "counts": [],
-                            },
-                        }
-                    )
-
-                # Derive metrics from in-memory live threats
-                total_records = len(live_threats)
-                severity_weights = {
-                    "Critical": 1.0,
-                    "High": 0.75,
-                    "Medium": 0.5,
-                    "Low": 0.25,
-                }
-
-                threats_detected = 0
-                total_score = 0.0
-                type_counts = defaultdict(int)
-                counts_by_hour: dict[int, int] = {}
-                category_map = defaultdict(int)
-
-                for t in live_threats:
-                    sev = (t.get("severity") or "").title()
-                    if sev in ("High", "Critical"):
-                        threats_detected += 1
-                    total_score += float(severity_weights.get(sev, 0.25))
-
-                    ttype = t.get("threat_type") or "Unknown"
-                    type_counts[ttype] += 1
-
-                    ts_str = str(t.get("timestamp") or "")
-                    if len(ts_str) >= 2 and ts_str[:2].isdigit():
-                        try:
-                            h_int = int(ts_str[:2])
-                        except ValueError:
-                            h_int = None
-                        if h_int is not None and 0 <= h_int < 24:
-                            counts_by_hour[h_int] = counts_by_hour.get(h_int, 0) + 1
-
-                    cat = t.get("attack_category") or "Network"
-                    category_map[cat] += 1
-
-                risk_score = round(total_score / float(total_records), 2) if total_records else 0.0
-
-                if threats_detected > 0 and type_counts:
-                    top_type = max(type_counts.items(), key=lambda kv: kv[1])[0]
-                    status_text = f"Threats detected – most common threat type: {top_type}."
-                else:
-                    status_text = "Safe – no High or Critical threats detected."
-
                 timeline_labels = [f"{h:02d}" for h in range(24)]
-                timeline_counts = [counts_by_hour.get(h, 0) for h in range(24)]
-
-                category_labels: list[str] = []
-                category_counts: list[int] = []
-                for label, cnt in sorted(
-                    category_map.items(), key=lambda kv: kv[1], reverse=True
-                )[:8]:
-                    category_labels.append(label)
-                    category_counts.append(int(cnt))
-
-                # Simple 12-month forecast based on current daily volume
-                daily_total = sum(timeline_counts)
-                if daily_total == 0:
-                    daily_total = threats_detected or total_records
-
-                monthly_base = max(int(daily_total * 30), 0)
                 forecast_labels = [f"M{i+1}" for i in range(12)]
-                if monthly_base == 0:
-                    forecast_counts = [0 for _ in range(12)]
-                else:
-                    forecast_counts = [
-                        int(round(monthly_base * (1.0 + 0.05 * i))) for i in range(12)
-                    ]
-
                 return jsonify(
                     {
                         "ok": True,
-                        "status_text": status_text,
-                        "total_records": total_records,
-                        "threats_detected": threats_detected,
-                        "risk_score": risk_score,
+                        "status_text": "Safe – no threat records available for analysis.",
+                        "total_records": 0,
+                        "threats_detected": 0,
+                        "risk_score": 0.0,
                         "timeline": {
                             "labels": timeline_labels,
-                            "counts": timeline_counts,
+                            "counts": [0 for _ in range(24)],
                         },
                         "forecast": {
                             "labels": forecast_labels,
-                            "counts": forecast_counts,
+                            "counts": [0 for _ in range(12)],
                         },
                         "categories": {
-                            "labels": category_labels,
-                            "counts": category_counts,
+                            "labels": [],
+                            "counts": [],
                         },
                     }
                 )
