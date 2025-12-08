@@ -29,11 +29,9 @@ app.secret_key = "dev-secret-key"
 socketio = SocketIO(
     app,
     cors_allowed_origins="*",
-    async_mode="threading",
+    async_mode="eventlet",
     ping_timeout=60,
     ping_interval=25,
-    engineio_logger=False,
-    socketio_logger=False
 )
 
 STATIC_REPORT_PATH = BASE_DIR / "reports" / "web_static_latest.csv"
@@ -2848,6 +2846,8 @@ def api_aip_analyze():
     or validated, so the dashboard can be hooked up to a real AI backend later.
     """
 
+    global threat_history
+
     payload = request.get_json(silent=True) or {}
     # Accepted for future use; currently unused.
     _api_key = (payload.get("api_key") or "").strip()
@@ -2855,13 +2855,13 @@ def api_aip_analyze():
 
     # Basic API key validation so the UI can surface an obvious error instead of
     # pretending to run an analysis with an invalid key. In this demo, we simply
-    # require a non-empty key with a minimum length.
-    if len(_api_key) < 8:
+    # require a non-empty key.
+    if not _api_key:
         return (
             jsonify(
                 {
                     "ok": False,
-                    "message": "invalid api entered enter a valid api to analyse okay",
+                    "message": "enter api key to analyse okay",
                 }
             ),
             400,
@@ -2874,33 +2874,141 @@ def api_aip_analyze():
             conn.row_factory = sqlite3.Row
             cur = conn.cursor()
 
-            # Total records
+            # Total records currently stored in the SQLite threat_events table
             cur.execute("SELECT COUNT(*) AS c FROM threat_events")
             row = cur.fetchone()
             total_records = int(row["c"] or 0)
 
+            # If the database is still empty (common on fresh deploys or when the
+            # user hasn't explicitly saved to a database yet), fall back to the
+            # in-memory live threat_history so the AIP panel can still show a
+            # meaningful analysis based on recent activity.
             if total_records == 0:
-                # No data yet – return a safe baseline payload so charts can render.
+                live_threats = list(threat_history)
+                if not live_threats:
+                    # No data anywhere – return a safe baseline payload so charts render.
+                    timeline_labels = [f"{h:02d}" for h in range(24)]
+                    forecast_labels = [f"M{i+1}" for i in range(12)]
+                    return jsonify(
+                        {
+                            "ok": True,
+                            "status_text": "Safe – no threat records available for analysis.",
+                            "total_records": 0,
+                            "threats_detected": 0,
+                            "risk_score": 0.0,
+                            "timeline": {
+                                "labels": timeline_labels,
+                                "counts": [0 for _ in range(24)],
+                            },
+                            "forecast": {
+                                "labels": forecast_labels,
+                                "counts": [0 for _ in range(12)],
+                            },
+                            "categories": {
+                                "labels": [],
+                                "counts": [],
+                            },
+                        }
+                    )
+
+                # Derive metrics from in-memory live threats
+                total_records = len(live_threats)
+                severity_weights = {
+                    "Critical": 1.0,
+                    "High": 0.75,
+                    "Medium": 0.5,
+                    "Low": 0.25,
+                }
+
+                threats_detected = 0
+                total_score = 0.0
+                type_counts = defaultdict(int)
+                counts_by_hour: dict[int, int] = {}
+                category_map = defaultdict(int)
+
+                for t in live_threats:
+                    sev = (t.get("severity") or "").title()
+                    if sev in ("High", "Critical"):
+                        threats_detected += 1
+                    total_score += float(severity_weights.get(sev, 0.25))
+
+                    ttype = t.get("threat_type") or "Unknown"
+                    type_counts[ttype] += 1
+
+                    ts_str = str(t.get("timestamp") or "")
+                    if len(ts_str) >= 2 and ts_str[:2].isdigit():
+                        try:
+                            h_int = int(ts_str[:2])
+                        except ValueError:
+                            h_int = None
+                        if h_int is not None and 0 <= h_int < 24:
+                            counts_by_hour[h_int] = counts_by_hour.get(h_int, 0) + 1
+
+                    cat = t.get("attack_category") or "Network"
+                    category_map[cat] += 1
+
+                risk_score = round(total_score / float(total_records), 2) if total_records else 0.0
+
+                if threats_detected > 0 and type_counts:
+                    top_type = max(type_counts.items(), key=lambda kv: kv[1])[0]
+                    status_text = f"Threats detected – most common threat type: {top_type}."
+                else:
+                    status_text = "Safe – no High or Critical threats detected."
+
+                datasets_suffix = (
+                    " Reference datasets for similar security analytics often include: "
+                    "4pnwdgt7b7 (Synthetic Network Traffic Dataset for Anomaly Detection in SDN Environments), "
+                    "Gotham Dataset 2025 (IoT network traffic, benign and malicious), "
+                    "MH-1M Android Malware Dataset, APIMDS (API call-sequence dataset for malware analysis), "
+                    "EMBER (PE file feature dataset for malware classification), CTU-13 (botnet/normal/background traffic), "
+                    "Canadian Institute for Cybersecurity intrusion detection datasets, Unified Host and Network Dataset (LANL), "
+                    "NSL-KDD, and KDD Cup 1999."
+                )
+                status_text = status_text + datasets_suffix
+
                 timeline_labels = [f"{h:02d}" for h in range(24)]
+                timeline_counts = [counts_by_hour.get(h, 0) for h in range(24)]
+
+                category_labels: list[str] = []
+                category_counts: list[int] = []
+                for label, cnt in sorted(
+                    category_map.items(), key=lambda kv: kv[1], reverse=True
+                )[:8]:
+                    category_labels.append(label)
+                    category_counts.append(int(cnt))
+
+                # Simple 12-month forecast based on current daily volume
+                daily_total = sum(timeline_counts)
+                if daily_total == 0:
+                    daily_total = threats_detected or total_records
+
+                monthly_base = max(int(daily_total * 30), 0)
                 forecast_labels = [f"M{i+1}" for i in range(12)]
+                if monthly_base == 0:
+                    forecast_counts = [0 for _ in range(12)]
+                else:
+                    forecast_counts = [
+                        int(round(monthly_base * (1.0 + 0.05 * i))) for i in range(12)
+                    ]
+
                 return jsonify(
                     {
                         "ok": True,
-                        "status_text": "Safe – no threat records available for analysis.",
-                        "total_records": 0,
-                        "threats_detected": 0,
-                        "risk_score": 0.0,
+                        "status_text": status_text,
+                        "total_records": total_records,
+                        "threats_detected": threats_detected,
+                        "risk_score": risk_score,
                         "timeline": {
                             "labels": timeline_labels,
-                            "counts": [0 for _ in range(24)],
+                            "counts": timeline_counts,
                         },
                         "forecast": {
                             "labels": forecast_labels,
-                            "counts": [0 for _ in range(12)],
+                            "counts": forecast_counts,
                         },
                         "categories": {
-                            "labels": [],
-                            "counts": [],
+                            "labels": category_labels,
+                            "counts": category_counts,
                         },
                     }
                 )
