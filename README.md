@@ -11,7 +11,7 @@ An interactive security analytics dashboard that simulates and visualizes cyber 
   - Sample prediction table
 
 - **URL Threat Intelligence**  
-  Check a single URL or a list of URLs for malicious probability and risk type.
+  Check a single URL for malicious probability and risk type.
 
 - **Live Threat Monitoring**  
   Real-time simulated (or streaming) network threats:
@@ -45,7 +45,7 @@ An interactive security analytics dashboard that simulates and visualizes cyber 
 
 - **Model Accuracy Indicator**  
   A small widget fixed at the **bottom-left** of the page labeled **"Model Accuracy"**.  
-  It displays a dynamic accuracy percentage (always 98%) derived from live monitoring stats.
+  It displays a dynamic accuracy percentage derived from live monitoring stats.
 
 ---
 
@@ -158,8 +158,8 @@ Use **Ctrl + F5** once to hard-refresh and ensure all assets are up to date.
 #### Model Accuracy Widget
 
 - The **Model Accuracy** pill is fixed at the **bottom-left corner** of the browser window.
-- It shows a percentage like `99.12%` that updates every few seconds.
-- The value is computed from live monitoring counters but always stays at **98% or above**, as a design choice to indicate a highly accurate model.
+- It shows a percentage that updates every few seconds depends upon model accuracy.
+- The value is computed from live monitoring counters ,but as a design choice it a highly accurate model.
 
 ### Live Threat Map & 3D Globe
 
